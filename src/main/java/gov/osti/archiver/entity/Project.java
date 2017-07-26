@@ -2,10 +2,12 @@
  */
 package gov.osti.archiver.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Serializable;
@@ -81,10 +83,14 @@ public class Project implements Serializable {
     }
 
     /**
+     * Should return ONLY the BASE FILE NAME if set.
+     * 
      * @return the fileName
      */
     public String getFileName() {
-        return fileName;
+        return (null==fileName) ? 
+                null :
+                fileName.substring(fileName.lastIndexOf(File.separator)+1);
     }
 
     /**

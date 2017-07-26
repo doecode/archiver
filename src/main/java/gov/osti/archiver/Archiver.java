@@ -61,6 +61,12 @@ public class Archiver extends Thread {
             return;
         }
         
+        // TODO: handle FILE UPLOADS
+        if (null==project.getRepositoryLink() && null!=project.getFileName()) {
+            log.warn("Here's where we deal with file " + project.getFileName());
+            return;
+        }
+        
         // set some reasonable default timeouts
         RequestConfig rc = RequestConfig.custom().setSocketTimeout(5000).setConnectTimeout(5000).build();
         // create an HTTP client to request through

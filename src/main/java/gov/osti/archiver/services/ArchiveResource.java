@@ -7,6 +7,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import gov.osti.archiver.entity.Project;
 import gov.osti.archiver.listener.ServletContextListener;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import javax.persistence.EntityManager;
 import javax.ws.rs.Produces;
 import javax.ws.rs.Consumes;
@@ -17,6 +22,8 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
+import org.glassfish.jersey.media.multipart.FormDataParam;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,9 +37,10 @@ import org.slf4j.LoggerFactory;
  */
 @Path("project")
 public class ArchiveResource {
-
     // logger
     private static Logger log = LoggerFactory.getLogger(ArchiveResource.class);
+    // base filesystem path to save information into
+    private static String FILE_BASEDIR = ServletContextListener.getConfigurationProperty("file.basedir");
 
     // XML/JSON mapper reference
     private static final ObjectMapper mapper = new ObjectMapper()
@@ -96,15 +104,21 @@ public class ArchiveResource {
      * @param project_name the PROJECT NAME 
      * @param project_description the PROJECT DESCRIPTION (optional)
      * @param repository_link the REPOSITORY LINK for cloning
+     * @param file (for multi-part upload requests) archive file containing
+     * @param fileInfo (multi-part uploads) file disposition information
+     * source project
      * @return 
      */
     @POST
-    @Consumes (MediaType.APPLICATION_JSON)
+    @Consumes ({MediaType.APPLICATION_JSON, MediaType.MULTIPART_FORM_DATA})
     @Produces (MediaType.APPLICATION_JSON)
-    public Response archive(@QueryParam ("code_id") Long code_id, 
+    public Response archive(
+            @QueryParam ("code_id") Long code_id, 
             @QueryParam("project_name") String project_name,
             @QueryParam("project_description") String project_description,
-            @QueryParam("repository_link") String repository_link) {
+            @QueryParam("repository_link") String repository_link,
+            @FormDataParam("file") InputStream file,
+            @FormDataParam("file") FormDataContentDisposition fileInfo) {
         EntityManager em = ServletContextListener.createEntityManager();
         
         try {
@@ -120,6 +134,23 @@ public class ArchiveResource {
                 project.setProjectName(project_name);
                 project.setRepositoryLink(repository_link);
                 project.setStatus(Project.Status.Pending);
+                
+                /**
+                 * for FILE UPLOADS, need to store in a new filesystem path,
+                 * and set the information in the Project.
+                 */
+                if ( null!=file && null!=fileInfo ) {
+                    try {
+                        String fileName = saveFile(file, fileInfo.getFileName());
+                        project.setFileName(fileName);
+                    } catch ( IOException e ) {
+                        log.error ("File Upload Failed: " + e.getMessage());
+                        return Response
+                                .status(Response.Status.HTTP_VERSION_NOT_SUPPORTED)
+                                .entity("File upload operation failed.")
+                                .build();
+                    }
+                }
                 
                 em.persist(project);
                 
@@ -143,5 +174,21 @@ public class ArchiveResource {
         } finally {
             em.close();
         }
+    }
+    
+    /**
+     * Store a given File InputStream to a new base absolute path.
+     * @param in the InputStream containing the File
+     * @param fileName the base file name to use
+     * @throws IOException on IO errors
+     * @return the new File name complete path
+     */
+    private static String saveFile(InputStream in, String fileName) throws IOException {
+        // store this file in a designated base path
+        java.nio.file.Path destination = FileSystems.getDefault().getPath(FILE_BASEDIR + File.separator + fileName);
+        // save it
+        Files.copy(in, destination);
+        
+        return destination.toString();
     }
 }

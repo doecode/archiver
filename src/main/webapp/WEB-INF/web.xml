@@ -13,7 +13,7 @@
         <servlet-class>org.glassfish.jersey.servlet.ServletContainer</servlet-class>
         <init-param>
             <param-name>jersey.config.server.provider.classnames</param-name>
-            <param-value>gov.osti.archiver.services.ArchiveResource</param-value>
+            <param-value>gov.osti.archiver.services.ArchiveResource,org.glassfish.jersey.media.multipart.MultiPartFeature</param-value>
         </init-param>       
     </servlet>
     <servlet-mapping>
