@@ -17,7 +17,7 @@ developers:
 related_identifiers:
 - identifier_type: URL
   identifier_value: http://github.com/doecode/doecode
-  relation_type: IsParentOf
+  relation_type: IsPartOf
   description: Parent project
 contributing_organizations:
 - organization_name: Oak Ridge National Laboratory
