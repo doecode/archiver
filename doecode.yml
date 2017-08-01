@@ -1,0 +1,52 @@
+#Metadata for Archiver project
+#Version: 1.3
+
+---
+repository_link: https://github.com/doecode/archiver
+access_limitations:
+- UNL
+developers:
+- first_name: Neal
+  last_name: Ensor
+  email: ensorn@osti.gov
+  affiliations: DOE OSTI
+- affiliations: Information International Associates (Contractor to DOE)
+  first_name: Thomas
+  last_name: Welsch
+  email: welscht@osti.gov
+related_identifiers:
+- identifier_type: URL
+  identifier_value: http://github.com/doecode/doecode
+  relation_type: IsParentOf
+  description: Parent project
+contributing_organizations:
+- organization_name: Oak Ridge National Laboratory
+  contributor_type: DataCurator
+research_organizations:
+- organization_name: OSTI
+  DOE: true 
+- organization_name: ORNL
+  DOE: true
+sponsoring_organizations:
+- organization_name: DOE OSTI
+  DOE: true
+  funding_identifiers:
+  - identifier_type: AwardNumber
+    identifier_value: DE_865234
+software_title: Archiver sub-project for DOECode software registration project
+acronym: archiver
+license: GNU General Public License
+description: > 
+  A process to cache or clone various DOE-related software repositories for
+  hosting and backup on a local GitLab instance for DOECode support 
+  project.
+keywords: software, DOECode, hosting repositories
+disclaimers: open source
+recipient_name: Neal Ensor
+recipient_email: ensorn@osti.gov
+recipient_phone: 865-576-1295
+recipient_org: DOE OSTI
+site_accession_number: '2893'
+other_special_requirements: gitlab
+related_software: linux, gitlab, bitbucket
+release_date: 2017-08-21

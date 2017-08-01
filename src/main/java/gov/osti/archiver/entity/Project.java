@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
-import java.io.File;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Serializable;
@@ -83,14 +83,14 @@ public class Project implements Serializable {
     }
 
     /**
-     * Should return ONLY the BASE FILE NAME if set.
+     * Get the FILE NAME associated with this Project.
+     * For serialization, only emit the base file name itself.
      * 
-     * @return the fileName
+     * @return the fileName contains the absolute file path of the Project
      */
+    @JsonSerialize (using = FileNameSerializer.class)
     public String getFileName() {
-        return (null==fileName) ? 
-                null :
-                fileName.substring(fileName.lastIndexOf(File.separator)+1);
+        return fileName;
     }
 
     /**
