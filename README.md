@@ -6,6 +6,9 @@ source projects using a GitLab installation service.
 The archiver project is intended to keep local cached / cloned copies of DOE source code projects for backup and storage purposes.
 Should hosting services of such projects be lost, they might be recovered in some form from this archive service's GitLab installation.
 
+This project is intended to be of use directly from DOECode's [server project](https://github.com/doecode/server) for API caching
+support, and not exposed directly to other access.
+
 ## Setup and Configuration
 The archiver depends on an already-installed and configured [GitLab](https://about.gitlab.com/) installation (Community Edition or 
 Enterprise).  The instance should be installed on a server accessible by the archiver deployment (need not be the same server). 
