@@ -4,11 +4,13 @@ package gov.osti.archiver;
 
 import gov.osti.archiver.entity.Project;
 import gov.osti.archiver.listener.ServletContextListener;
+import gov.osti.archiver.util.Extractor;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
 import javax.persistence.EntityManager;
+import org.apache.commons.compress.archivers.ArchiveException;
 import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.config.RequestConfig;
@@ -61,12 +63,6 @@ public class Archiver extends Thread {
             return;
         }
         
-        // TODO: handle FILE UPLOADS
-        if (null==project.getRepositoryLink() && null!=project.getFileName()) {
-            log.warn("Here's where we deal with file " + project.getFileName());
-            return;
-        }
-        
         // set some reasonable default timeouts
         RequestConfig rc = RequestConfig.custom().setSocketTimeout(5000).setConnectTimeout(5000).build();
         // create an HTTP client to request through
@@ -92,6 +88,32 @@ public class Archiver extends Thread {
                 return;
             }
             
+            // start a data transaction
+            em.getTransaction().begin();
+            
+            /**
+             * File uploads are to be extracted to a temporary folder, a git 
+             * repository created from the contents, then that used as import URL
+             * material for GitLab.
+             * 
+             * Handled in the Extractor.  What comes back should be the base file
+             * path for the newly-created git repository from the archive contents.
+             * 
+             * If this has some sort of IO error, record that fact and abort.
+             */
+            if (null==project.getRepositoryLink() && null!=project.getFileName()) {
+                try {
+                    project.setRepositoryLink(Extractor.uncompressArchive(project));
+                } catch ( IOException | ArchiveException e ) {
+                    log.warn("Archive extraction error: "+ e.getMessage());
+                    p.setStatus(Project.Status.Error);
+                    p.setStatusMessage("Archive Error: " + e.getMessage());
+                    em.persist(p);
+                    em.getTransaction().commit();
+                    return;
+                }
+            }
+            
             // attempt to post this to GITLAB
             HttpPost request = new HttpPost(GITLAB_URL + GITLAB_API_BASE);
             request.addHeader("PRIVATE-TOKEN", GITLAB_APIKEY);
@@ -105,14 +127,8 @@ public class Archiver extends Thread {
 
             CloseableHttpResponse response = hc.execute(request);
 
-            em.getTransaction().begin();
-            
             if ( HttpStatus.SC_CREATED==response.getStatusLine().getStatusCode() ) {
                 Repository message = Repository.fromJson(EntityUtils.toString(response.getEntity()));
-                
-                log.info("POSTED PROJECT: " + message.getId() + " name=" + message.getName());
-                log.info("OWNED BY " + message.getOwner().getName());
-                
                 // store the information needed
                 p.setProjectId(message.getId());
                 // if GitLab imported better information, use it
@@ -128,12 +144,11 @@ public class Archiver extends Thread {
 
                 // report the error message
                 log.error("Error posting to GitLab: " + errors.getErrorMessage());
-                
+
                 p.setStatus(Project.Status.Error);
                 p.setStatusMessage(errors.getErrorMessage());
                 em.persist(p);
             }
-            
             em.getTransaction().commit();
         } catch ( UnsupportedOperationException | UnsupportedEncodingException e ) {
             log.error("URL Encoding Error: " + e.getMessage());

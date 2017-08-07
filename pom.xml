@@ -58,6 +58,13 @@
             <artifactId>org.eclipse.jgit</artifactId>
             <version>4.7.0.201704051617-r</version>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/org.postgresql/postgresql -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>9.4.1212</version>
+        </dependency>
+
 <!-- https://mvnrepository.com/artifact/org.apache.derby/derbyclient -->
         <dependency>
             <groupId>org.apache.derby</groupId>
@@ -118,6 +125,7 @@
     </dependencies>
 
     <build>
+        <finalName>${project.name}</finalName>
         <resources>
                 <resource>
                     <directory>src/main/resources</directory>
@@ -129,6 +137,12 @@
                     <targetPath>../filtered-resources</targetPath>
                 </resource>
         </resources>
+        <testResources>
+           <testResource>
+             <directory>src/test/resources</directory>
+             <filtering>true</filtering>
+           </testResource>
+        </testResources>
 
         <plugins>
  <!-- The Jetty plugin allows us to easily test the development build by
@@ -148,6 +162,19 @@
                     </webApp>
                   </configuration>
             </plugin>
+            <plugin>
+                 <groupId>org.apache.tomcat.maven</groupId>
+                 <artifactId>tomcat7-maven-plugin</artifactId>
+                 <version>2.2</version>
+                 <configuration>
+                     <url>http://${host}:${port}/manager/text</url>
+                     <server>${server}</server>
+                     <path>/${projectName}</path>
+                     <warFile>${project.build.directory}/${project.name}.war</warFile>
+                     <path>/${project.name}</path>
+                 </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
