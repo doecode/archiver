@@ -1,0 +1,2 @@
+This is a simple testing file for archival purposes, in order to test
+identification of various archive file formats.

@@ -7,14 +7,17 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import gov.osti.archiver.Archiver;
 import gov.osti.archiver.entity.Project;
 import gov.osti.archiver.listener.ServletContextListener;
-import java.io.File;
+import gov.osti.archiver.util.Extractor;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import javax.persistence.EntityManager;
@@ -26,6 +29,9 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import org.apache.commons.compress.archivers.ArchiveException;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.util.EntityUtils;
 import org.eclipse.jgit.util.StringUtils;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
@@ -209,10 +215,15 @@ public class ArchiveResource {
      * area, a git repository made of its content, and import THAT as a local
      * operation into GitLab.
      * 
+     * Procedure:
+     * 1. attempt to look up the PROJECT based on CODE_ID.
+     * 2. if present, DELETE that PROJECT and start anew. (Drop from GitLab also if present there).
+     * 3. if not, or DELETED, go ahead and insert a PENDING PROJECT record.
+     * 4. hand off to worker thread to do the file operations and import into GitLab.
+     * 
      * Response Codes:
-     * 200 - PROJECT is already on file, returns its JSON
      * 201 - Created a new PROJECT and called the background thread to import
-     * 400 - Missing required field(s) for processing
+     * 400 - Missing required field(s) for processing, or unrecognized archive file format
      * 500 - unable to read the JSON
      * 
      * @param json the JSON of the PROJECT to archive
@@ -233,45 +244,66 @@ public class ArchiveResource {
             // attempt to look up existing Project
             Project p = em.find(Project.class, project.getCodeId());
             
-            if (null==p) {
-                // not on file, create a new one
-                em.getTransaction().begin();
-                
-                project.setStatus(Project.Status.Pending);
-                
-                /**
-                 * for FILE UPLOADS, need to store in a new filesystem path,
-                 * and set the information in the Project.
-                 */
-                if ( null!=file && null!=fileInfo ) {
-                    try {
-                        String fileName = saveFile(file, project.getCodeId(), fileInfo.getFileName());
-                        project.setFileName(fileName);
-                    } catch ( IOException e ) {
-                        log.error ("File Upload Failed: " + e.getMessage());
-                        return errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "File upload operation failed.");
-                    }
+            /**
+             * if we have a PROJECT on file, we must:
+             * 1. REMOVE any GitLab associated files if present,
+             * 2. WIPE the PROJECT from the database,
+             * 3. and WIPE any files that may be uploaded for this project.
+             */
+            if (null!=p) {
+                // call GitLab to REMOVE the existing project if needed
+                if (null!=p.getProjectId()) {
+                    // just call the GitLab API to DELETE existing Project record
+                    Archiver.callGitLabDelete(p);
                 }
-                
-                em.persist(project);
-                
+                // REMOVE the Project as well
+                em.getTransaction().begin();
+                em.remove(p);
                 em.getTransaction().commit();
-                
-                // fire off the background thread
-                ServletContextListener.callArchiver(project);
-                
-                // return 201 with JSON
-                return Response
-                        .status(Response.Status.CREATED)
-                        .entity(project.toJson())
-                        .build();
-            } else {
-                // found it, return 200 with JSON
-                return Response
-                        .status(Response.Status.OK)
-                        .entity(p.toJson())
-                        .build();
+                // WIPE OUT any files we may have uploaded
+                wipeFiles(p.getCodeId());
             }
+            
+            // start the persistence transaction
+            em.getTransaction().begin();
+            
+            // now we need to INSERT a new PROJECT
+            project.setStatus(Project.Status.Pending);
+                
+            /**
+             * for FILE UPLOADS, need to store in a new filesystem path,
+             * and set the information in the Project.
+             */
+            if ( null!=file && null!=fileInfo ) {
+                try {
+                    String fileName = saveFile(file, project.getCodeId(), fileInfo.getFileName());
+                    project.setFileName(fileName);
+                    
+                    try {
+                        if (null==Extractor.detectArchiveFormat(fileName))
+                            throw new ArchiveException ("Invalid or unknown archive format.");
+                    } catch ( ArchiveException e ) {
+                        log.warn("Invalid Archive for " + fileName + ": " + e.getMessage());
+                        return errorResponse(Response.Status.BAD_REQUEST, "Unrecognized archive file type, unsupported format.");
+                    }
+                } catch ( IOException e ) {
+                    log.error ("File Upload Failed: " + e.getMessage());
+                    return errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "File upload operation failed.");
+                }
+            }
+
+            em.persist(project);
+
+            em.getTransaction().commit();
+
+            // fire off the background thread
+            ServletContextListener.callArchiver(project);
+
+            // return 201 with JSON
+            return Response
+                    .status(Response.Status.CREATED)
+                    .entity(project.toJson())
+                    .build();
         } catch ( IOException e ) { 
             log.warn("JSON Parser Error: " + e.getMessage());
             return errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "JSON parsing error.");
@@ -288,7 +320,6 @@ public class ArchiveResource {
      * JSON should contain at least code_id, project_name, and repository_link.
      * 
      * Response Code:
-     * 200 -- already on file, OK
      * 201 -- created new Project, OK
      * 400 -- no CODE ID supplied
      * 500 -- unable to parse incoming JSON
@@ -314,7 +345,6 @@ public class ArchiveResource {
      * POST a Project to archive in JSON format.
      * 
      * Response Codes:
-     * 200 - OK, project already on file, return its JSON
      * 201 - CREATED, new project created and logged
      * 400 - BAD REQUEST, missing required CODE_ID to map Project to
      * 500 - INTERNAL SERVER ERROR, unable to process JSON request
@@ -340,9 +370,53 @@ public class ArchiveResource {
     private static String saveFile(InputStream in, Long codeId, String fileName) throws IOException {
         // store this file in a designated base path
         java.nio.file.Path destination = Paths.get(FILE_BASEDIR, String.valueOf(codeId), fileName);
+        // make the necessary file paths
+        Files.createDirectories(destination.getParent());
         // save it
         Files.copy(in, destination);
         
         return destination.toString();
+    }
+    
+    /**
+     * Delete a PROJECT'S cache files, including any extracted files, if found.
+     * 
+     * Should be used as a RESET BUTTON for this Project.  Will do nothing if
+     * no files exist to delete.
+     * 
+     * @param codeId the CODE ID to wipe files for
+     * @throws IOException on file IO errors
+     */
+    private static void wipeFiles(Long codeId) throws IOException {
+        // only do this if FILES EXIST
+        if ( !Files.exists(Paths.get(FILE_BASEDIR, String.valueOf(codeId))) )
+                return;
+        
+        // starting at the FILE_BASEDIR + codeId, wipe out the cached files and
+        // any folders
+        Files.walkFileTree(Paths.get(FILE_BASEDIR, String.valueOf(codeId)), 
+                new SimpleFileVisitor<java.nio.file.Path>() {
+            @Override
+            public FileVisitResult visitFile(java.nio.file.Path file, BasicFileAttributes attrs)
+            throws IOException
+            {
+                // delete this file if present
+                Files.deleteIfExists(file);
+                return FileVisitResult.CONTINUE;
+            }
+            
+            @Override
+            public FileVisitResult postVisitDirectory(java.nio.file.Path directory, IOException e) throws IOException {
+                // if there's no Exception, delete this, otherwise throw it
+                if (null==e) {
+                    // wipe this directory; should be empty
+                    Files.deleteIfExists(directory);
+                    return FileVisitResult.CONTINUE;
+                } else {
+                    // cannot follow directory, abort
+                    throw e;
+                }
+            }
+        });
     }
 }

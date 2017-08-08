@@ -10,6 +10,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.UUID;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveException;
 import org.apache.commons.compress.archivers.ArchiveInputStream;
@@ -33,6 +34,57 @@ public class Extractor {
     private static String FILE_BASEDIR = ServletContextListener.getConfigurationProperty("file.archive");
     // get the GITLAB prefix URL for local uploads
     private static String GITLAB_LOCALURL = ServletContextListener.getConfigurationProperty("gitlab.localurl");
+    
+    /**
+     * Attempt to open an ArchiveInputStream based on the file_name specified.
+     * 
+     * @param file_name ABSOLUTE file system path to the file to open
+     * @return an ArchiveInputStream if possible, or null if error or invalid
+     * @throws ArchiveException on archiver errors, or unable to identify type
+     * @throws IOException on file IO errors
+     */
+    public static ArchiveInputStream openArchiveStream(String file_name) throws ArchiveException, IOException {
+        ArchiveInputStream in;
+        
+        if (null==file_name)
+            return null;
+        
+        if (file_name.toLowerCase().endsWith(".gz") || file_name.toLowerCase().endsWith(".tgz")) {
+            in = new ArchiveStreamFactory()
+                    .createArchiveInputStream(
+                            new BufferedInputStream(
+                                    new GzipCompressorInputStream(
+                                            new FileInputStream(file_name))));
+        } else {
+            in = new ArchiveStreamFactory()
+                    .createArchiveInputStream(
+                            new BufferedInputStream(new FileInputStream(file_name)));
+        }
+        return in;
+    }
+    
+    /**
+     * Attempt to figure out what the file is based on its file name.
+     * 
+     * @param file_name the FILE NAME of the archive file
+     * @return a String identifying the underlying type of archive if possible, or null if not; should be one of
+     * "zip", "tar", "ar", "cpio", etc.  Full list in Apache ArchiveStreamFactory constants.
+     * 
+     * @throws ArchiveException on archiver errors
+     * @throws IOException on file IO errors
+     */
+    public static String detectArchiveFormat(String file_name) throws ArchiveException, IOException {
+        return (null==file_name) ? 
+                null :
+                (file_name.toLowerCase().endsWith("gz")) ?
+                ArchiveStreamFactory.detect(
+                        new BufferedInputStream(
+                                new GzipCompressorInputStream(
+                                        Files.newInputStream(Paths.get(file_name))))) :
+                ArchiveStreamFactory.detect(
+                        new BufferedInputStream(
+                                Files.newInputStream(Paths.get(file_name))));
+    }
     
     /**
      * Given a Project with a FileName attached, attempt to uncompress the
@@ -59,9 +111,10 @@ public class Extractor {
         File base_file = new File(file_name);
         if (!base_file.exists())
             throw new IOException ("Unable to read project file name.");
+        // construct a UNIQUE FILE PATH to extract files into
         java.nio.file.Path base_file_path = Paths.get(FILE_BASEDIR, 
                 String.valueOf(project.getCodeId()), 
-                base_file.getName());
+                UUID.randomUUID().toString());
         // use BASE FILE PATH (including NAME) as the EXTRACTION FOLDER
         File parent_folder = base_file_path.toFile();
         // ABORT if PARENT FOLDER EXISTS; might already be contents
@@ -71,21 +124,8 @@ public class Extractor {
         if (!parent_folder.mkdirs())
             throw new IOException ("Unable to create archive folder for extraction.");
         
-        ArchiveInputStream in;
-        // what if this is a COMPRESSED ARCHIVE? (e.g., .tar.gz, etc.)
-        if (project.getFileName().endsWith(".gz")) {
-            in = new ArchiveStreamFactory()
-                    .createArchiveInputStream(
-                            new BufferedInputStream(
-                                    new GzipCompressorInputStream(
-                                            new FileInputStream(project.getFileName()))));
-        } else {
-            in = new ArchiveStreamFactory()
-                    .createArchiveInputStream(
-                            new BufferedInputStream(
-                                    new FileInputStream(project.getFileName())));
-        }
-        
+        // open the archiver stream
+        ArchiveInputStream in = openArchiveStream(project.getFileName());
         // iterate through the Archive, creating folders and extracting files.
         ArchiveEntry entry;
         

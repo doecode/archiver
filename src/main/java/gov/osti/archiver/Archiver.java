@@ -16,6 +16,7 @@ import org.apache.http.NameValuePair;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -47,7 +48,49 @@ public class Archiver extends Thread {
     }
     
     /**
+     * Call GitLab to REMOVE a given PROJECT from its repositories.  Based on the
+     * PROJECT ID value present.
+     * 
+     * @param project the PROJECT to remove
+     * @return true if DELETE was successful, false if not
+     * @throws IOException on IO errors
+     */
+    public static boolean callGitLabDelete(Project project) throws IOException {
+        CloseableHttpClient hc =
+                HttpClientBuilder
+                .create()
+                .setDefaultRequestConfig(RequestConfig
+                        .custom()
+                        .setSocketTimeout(5000)
+                        .setConnectTimeout(5000)
+                        .build())
+                .build();
+        
+        try {
+            // call DELETE operation based on PROJECT ID value
+            HttpDelete request = new HttpDelete(GITLAB_URL + GITLAB_API_BASE +"/"+ project.getProjectId());
+            request.addHeader("PRIVATE-TOKEN", GITLAB_APIKEY);
+            
+            CloseableHttpResponse response = hc.execute(request);
+            
+            int statusCode = response.getStatusLine().getStatusCode();
+            
+            if (HttpStatus.SC_OK!=statusCode) {
+                log.warn("GitLab DELETE Error Code: " + statusCode);
+                log.warn("Message: " + EntityUtils.toString(response.getEntity()));
+                return false;
+            }
+        } finally {
+            hc.close();
+        }
+        
+        return true;
+    }
+    
+    /**
      * Perform the Archiving jobs to get Project into GitLab.
+     * 
+     * 
      */
     @Override
     public void run() {
@@ -62,18 +105,18 @@ public class Archiver extends Thread {
             log.warn("GitLab archive instance not set up properly.");
             return;
         }
-        
-        // set some reasonable default timeouts
-        RequestConfig rc = RequestConfig.custom().setSocketTimeout(5000).setConnectTimeout(5000).build();
-        // create an HTTP client to request through
-        CloseableHttpClient hc = 
-                HttpClientBuilder
-                .create()
-                .setDefaultRequestConfig(rc)
-                .build();
         // database interface
         EntityManager em = ServletContextListener.createEntityManager();
-
+        // for API communications
+        CloseableHttpClient hc =
+                HttpClientBuilder
+                .create()
+                .setDefaultRequestConfig(RequestConfig
+                        .custom()
+                        .setSocketTimeout(5000)
+                        .setConnectTimeout(5000)
+                        .build())
+                .build();
         try {
             // attempt to look up the Project
             Project p = em.find(Project.class, project.getCodeId());
@@ -124,7 +167,7 @@ public class Archiver extends Thread {
             parameters.add(new BasicNameValuePair("description", project.getProjectDescription()));
             parameters.add(new BasicNameValuePair("import_url", project.getRepositoryLink()));
             request.setEntity(new UrlEncodedFormEntity(parameters));
-
+            
             CloseableHttpResponse response = hc.execute(request);
 
             if ( HttpStatus.SC_CREATED==response.getStatusLine().getStatusCode() ) {
@@ -155,11 +198,13 @@ public class Archiver extends Thread {
         } catch ( IOException e ) {
             log.error("GitLab Communication Error: " + e.getMessage());
         } finally {
+            // dispose of the EntityManager
+            em.close();
+            // close the HTTP API channel
             try {
-                hc.close(); 
-                em.close();
+                hc.close();
             } catch ( IOException e ) {
-                log.warn("Close Error: " + e.getMessage());
+                log.warn("HTTP Close Error: " + e.getMessage());
             }
         }
     }
