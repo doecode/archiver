@@ -172,7 +172,7 @@ public class Project implements Serializable {
     @Column (length = 50, name = "status")
     @Enumerated (EnumType.STRING)
     private Status status = Status.Pending; // default value
-    @Column (length = 500, name = "status_message")
+    @Column (length = 2000, name = "status_message")
     private String statusMessage;
     
     /**

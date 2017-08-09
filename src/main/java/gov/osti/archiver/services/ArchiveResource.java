@@ -30,8 +30,6 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import org.apache.commons.compress.archivers.ArchiveException;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.util.EntityUtils;
 import org.eclipse.jgit.util.StringUtils;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
@@ -253,7 +251,8 @@ public class ArchiveResource {
              * If the PROJECT is already on file, see if the repository link or
              * file has not changed; if they have not, we're okay (return OK).
              * Note that if a FILE is uploaded, we MUST assume that it's new, so
-             * we MUST treat it as if changes happened.
+             * we MUST treat it as if changes happened.  Also, if on-file Project
+             * is in Error status, assume this is re-submission and no longer valid.
              * 
              * If the PROJECTS aren't equivalent, we must:
              * 1. REMOVE any GitLab associated files if present,
