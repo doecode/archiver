@@ -222,6 +222,7 @@ public class ArchiveResource {
      * 4. hand off to worker thread to do the file operations and import into GitLab.
      * 
      * Response Codes:
+     * 200 - Project already archived (no changes to repository or file), returns JSON
      * 201 - Created a new PROJECT and called the background thread to import
      * 400 - Missing required field(s) for processing, or unrecognized archive file format
      * 500 - unable to read the JSON
@@ -238,19 +239,40 @@ public class ArchiveResource {
         try {
             Project project = mapper.readValue(json, Project.class);
             
+            // must have a CODE_ID value
             if (null==project.getCodeId())
                 return errorResponse(Response.Status.BAD_REQUEST, "Missing required Code ID value.");
+            // must have at least a REPOSITORY LINK or FILE to process
+            if (null==project.getRepositoryLink() && null==file)
+                return errorResponse(Response.Status.BAD_REQUEST, "No repository link or file upload to cache.");
             
             // attempt to look up existing Project
             Project p = em.find(Project.class, project.getCodeId());
             
             /**
-             * if we have a PROJECT on file, we must:
+             * If the PROJECT is already on file, see if the repository link or
+             * file has not changed; if they have not, we're okay (return OK).
+             * Note that if a FILE is uploaded, we MUST assume that it's new, so
+             * we MUST treat it as if changes happened.
+             * 
+             * If the PROJECTS aren't equivalent, we must:
              * 1. REMOVE any GitLab associated files if present,
              * 2. WIPE the PROJECT from the database,
              * 3. and WIPE any files that may be uploaded for this project.
+             * 4. PROCESS this one as a new entry.
              */
             if (null!=p) {
+                // check against what's passed in to see if there were changes
+                // NOTE: If previous Project status was ERROR, assume we need to re-do
+                if ( StringUtils.equalsIgnoreCase(p.getRepositoryLink(), project.getRepositoryLink()) &&
+                     !Project.Status.Error.equals(p.getStatus()) &&
+                     null==file ) {
+                    // we haven't changed, so just return the DATABASE PROJECT
+                    return Response
+                            .status(Response.Status.OK)
+                            .entity(p.toJson())
+                            .build();
+                }
                 // call GitLab to REMOVE the existing project if needed
                 if (null!=p.getProjectId()) {
                     // just call the GitLab API to DELETE existing Project record
@@ -317,7 +339,8 @@ public class ArchiveResource {
      * nothing.  If not, create an initial Project entity in the database, and
      * spin off an archiving Thread to handle import into GitLab.
      * 
-     * JSON should contain at least code_id, project_name, and repository_link.
+     * Note that this ALWAYS persists a new PROJECT, as we cannot determine
+     * if the file is the same or not as previously uploaded.
      * 
      * Response Code:
      * 201 -- created new Project, OK
@@ -342,9 +365,11 @@ public class ArchiveResource {
     }
     
     /**
-     * POST a Project to archive in JSON format.
+     * POST a Project to archive in JSON format.  JSON should contain at least
+     * a CODE_ID and PROJECT_NAME value, with a REPOSITORY_LINK.
      * 
      * Response Codes:
+     * 200 - OK, project is already on file
      * 201 - CREATED, new project created and logged
      * 400 - BAD REQUEST, missing required CODE_ID to map Project to
      * 500 - INTERNAL SERVER ERROR, unable to process JSON request
