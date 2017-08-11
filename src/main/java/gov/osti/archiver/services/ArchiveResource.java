@@ -2,9 +2,7 @@
  */
 package gov.osti.archiver.services;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import gov.osti.archiver.Archiver;
@@ -18,8 +16,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.List;
 import javax.persistence.EntityManager;
 import javax.ws.rs.Produces;
 import javax.ws.rs.Consumes;
@@ -58,113 +54,6 @@ public class ArchiveResource {
             .setSerializationInclusion(JsonInclude.Include.NON_NULL);
     
     /**
-     * Create a JSONAPI errors Object.
-     */
-    protected class ErrorResponse {
-        private int status;
-        private List<String> errors = new ArrayList<>();
-
-        public ErrorResponse(Response.Status s, String message) {
-            status = s.getStatusCode();
-            errors.add(message);
-        }
-        
-        public ErrorResponse(Response.Status s, List<String> messages) {
-            status = s.getStatusCode();
-            errors.addAll(messages);
-        }
-        
-        public void addError(String message) {
-            errors.add(message);
-        }
-        
-        public boolean addAll(List<String> messages) {
-            return errors.addAll(messages);
-        }
-        
-        @JsonIgnore
-        public boolean isEmpty() {
-            return errors.isEmpty();
-        }
-        
-        public void setStatus(Response.Status s) {
-            status = s.getStatusCode();
-        }
-        
-        /**
-         * @return the status
-         */
-        public int getStatus() {
-            return status;
-        }
-
-        /**
-         * @param status the status to set
-         */
-        public void setStatus(int status) {
-            this.status = status;
-        }
-
-        /**
-         * @return the errors
-         */
-        public List<String> getErrors() {
-            return errors;
-        }
-
-        /**
-         * @param errors the errors to set
-         */
-        public void setErrors(List<String> errors) {
-            this.errors = errors;
-        }
-    }
-    
-    /**
-     * Create a singleton JSONAPI error response.
-     * 
-     * @param status the HTTP status of the error
-     * @param message an error message
-     * @return a Response in JSONAPI error format
-     */
-    protected Response errorResponse(Response.Status status, String message) {
-        try {
-            return Response
-                    .status(status)
-                    .entity(mapper.writeValueAsString(new ErrorResponse(status, message)))
-                    .build();
-        } catch ( JsonProcessingException e ) {
-            log.warn("JSON Error: " + e.getMessage());
-            return Response
-                    .status(status)
-                    .entity("Error: " + message)
-                    .build();
-        }
-    }
-    
-    /**
-     * Create an array of error messages in JSONAPI format.
-     * 
-     * @param status the HTTP status of the error
-     * @param messages a set of messages to send
-     * @return a Response in JSONAPI error format
-     */
-    protected Response errorResponse(Response.Status status, List<String> messages) {
-        try {
-            return Response
-                    .status(status)
-                    .entity(mapper.writeValueAsString(new ErrorResponse(status, messages)))
-                    .build();
-        } catch ( JsonProcessingException e ) {
-            log.warn("JSON Error: " + e.getMessage());
-            return Response
-                    .status(status)
-                    .entity("Error: " + StringUtils.join(messages, ", "))
-                    .build();
-        }
-    }
-    
-    /**
      * Creates a new instance of ArchiveResource
      */
     public ArchiveResource() {
@@ -191,7 +80,9 @@ public class ArchiveResource {
             
             // not found? say so.
             if (null==project)
-                return errorResponse(Response.Status.NOT_FOUND, "Indicated Project not on file.");
+                return ErrorResponse
+                        .notFound("Indicated Project not on file.")
+                        .build();
             
             // found it, return as JSON
             return Response
@@ -239,10 +130,14 @@ public class ArchiveResource {
             
             // must have a CODE_ID value
             if (null==project.getCodeId())
-                return errorResponse(Response.Status.BAD_REQUEST, "Missing required Code ID value.");
+                return ErrorResponse
+                        .badRequest("Missing required Code ID value.")
+                        .build();
             // must have at least a REPOSITORY LINK or FILE to process
             if (null==project.getRepositoryLink() && null==file)
-                return errorResponse(Response.Status.BAD_REQUEST, "No repository link or file upload to cache.");
+                return ErrorResponse
+                        .badRequest("No repository link or file upload to cache.")
+                        .build();
             
             // attempt to look up existing Project
             Project p = em.find(Project.class, project.getCodeId());
@@ -305,11 +200,15 @@ public class ArchiveResource {
                             throw new ArchiveException ("Invalid or unknown archive format.");
                     } catch ( ArchiveException e ) {
                         log.warn("Invalid Archive for " + fileName + ": " + e.getMessage());
-                        return errorResponse(Response.Status.BAD_REQUEST, "Unrecognized archive file type, unsupported format.");
+                        return ErrorResponse
+                                .badRequest("Unrecognized archive file type, unsupported format.")
+                                .build();
                     }
                 } catch ( IOException e ) {
                     log.error ("File Upload Failed: " + e.getMessage());
-                    return errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "File upload operation failed.");
+                    return ErrorResponse
+                            .internalServerError("File upload operation failed.")
+                            .build();
                 }
             }
 
@@ -327,7 +226,9 @@ public class ArchiveResource {
                     .build();
         } catch ( IOException e ) { 
             log.warn("JSON Parser Error: " + e.getMessage());
-            return errorResponse(Response.Status.INTERNAL_SERVER_ERROR, "JSON parsing error.");
+            return ErrorResponse
+                    .internalServerError("JSON parsing error.")
+                    .build();
         } finally {
             em.close();
         }
