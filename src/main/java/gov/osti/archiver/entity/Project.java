@@ -2,7 +2,6 @@
  */
 package gov.osti.archiver.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,6 +25,10 @@ import org.slf4j.LoggerFactory;
  * Contains relevant information from DOECode software project for archiving
  * purposes to GitLab.
  * 
+ * GitLab-relevant restrictions:
+ * 2000 character limit on description
+ * project name must consist of alphanumeric, _, ., or space characters ONLY
+ * 
  * @author ensornl
  */
 @Entity
@@ -35,6 +38,10 @@ public class Project implements Serializable {
     // logger
     private static final Logger log = LoggerFactory.getLogger(Project.class);
 
+    // constants
+    protected static final int PROJECT_MAX_LENGTH = 2000;
+    protected static final String PROJECT_NAME_FILTER = "[^\\w\\s._]";
+    
     // Jackson object mapper
     private static final ObjectMapper mapper = new ObjectMapper()
             .setPropertyNamingStrategy(PropertyNamingStrategy.SNAKE_CASE)
@@ -108,13 +115,21 @@ public class Project implements Serializable {
     }
 
     /**
+     * Remove restricted characters from Project Name.  Add "_codeId" to make
+     * unique, if set.
+     * 
      * @param projectName the projectName to set
      */
     public void setProjectName(String projectName) {
-        this.projectName = projectName;
+        this.projectName = (null==projectName) ?
+                null :
+                projectName.replaceAll(PROJECT_NAME_FILTER, "") +
+                ((null==getCodeId()) ? "" : "_" + String.valueOf(getCodeId()));
     }
 
     /**
+     * Get the Project Description
+     * 
      * @return the projectDescription
      */
     public String getProjectDescription() {
@@ -122,10 +137,14 @@ public class Project implements Serializable {
     }
 
     /**
+     * Store the Project Description (limit to 2000 characters).
+     * 
      * @param projectDescription the projectDescription to set
      */
     public void setProjectDescription(String projectDescription) {
-        this.projectDescription = projectDescription;
+        this.projectDescription = (null!=projectDescription) ?
+                (projectDescription.length()>PROJECT_MAX_LENGTH) ? projectDescription.substring(0,PROJECT_MAX_LENGTH) : projectDescription :
+                null;
     }
 
     /**
@@ -167,7 +186,7 @@ public class Project implements Serializable {
     private String fileName;
     @Column (length = 1000, name = "project_name")
     private String projectName;
-    @Column (length = 4000, name = "project_description")
+    @Column (length = 2000, name = "project_description")
     private String projectDescription;
     @Column (length = 50, name = "status")
     @Enumerated (EnumType.STRING)

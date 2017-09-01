@@ -72,7 +72,7 @@ public class ServletContextListener implements javax.servlet.ServletContextListe
      */
     public static void callArchiver(Project project) {
         if (null==threadPool) {
-            threadPool = Executors.newFixedThreadPool(10);
+            threadPool = Executors.newFixedThreadPool(5);
         }
         
         threadPool.submit(new Archiver(project));        

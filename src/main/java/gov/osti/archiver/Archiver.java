@@ -113,8 +113,8 @@ public class Archiver extends Thread {
                 .create()
                 .setDefaultRequestConfig(RequestConfig
                         .custom()
-                        .setSocketTimeout(5000)
-                        .setConnectTimeout(5000)
+                        .setSocketTimeout(30000)
+                        .setConnectTimeout(30000)
                         .build())
                 .build();
         try {
