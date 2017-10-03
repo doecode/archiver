@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.UUID;
 import javax.persistence.EntityManager;
 import org.apache.commons.compress.archivers.ArchiveException;
 import org.eclipse.jgit.api.Git;
@@ -97,7 +98,7 @@ public class Archiver extends Thread {
                 // try to Git it
                 try {
                     Path pathName = Paths
-                            .get(FILE_BASEDIR, String.valueOf(project.getProjectId()), getFolderFor(project));
+                            .get(FILE_BASEDIR, String.valueOf(project.getProjectId()), UUID.randomUUID().toString());
                     p.setCacheFolder(pathName.toString());
                     Git git = Git
                             .cloneRepository()
@@ -132,24 +133,6 @@ public class Archiver extends Thread {
         } finally {
             // dispose of the EntityManager
             em.close();
-        }
-    }
-    
-    /**
-     * Obtain a named sub-folder for caching based on either FILE NAME or
-     * REPOSITORY LINK values.
-     * 
-     * @param p the PROJECT
-     * @return a FILE NAME for sub-folder purposes to cache in
-     */
-    protected static String getFolderFor(Project p) {
-        if (null!=p.getFileName()) {
-            return Paths.get(p.getFileName()).getFileName().toString();
-        } else {
-            String repoUrl = (StringUtils.isEmptyOrNull(p.getRepositoryLink())) ? "" : p.getRepositoryLink();
-            String[] parts = repoUrl.split("/");
-            
-            return (parts.length>0) ? parts[parts.length-1] : "";
         }
     }
 }
