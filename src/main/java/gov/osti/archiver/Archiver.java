@@ -82,7 +82,8 @@ public class Archiver extends Thread {
              * 
              * If this has some sort of IO error, record that fact and abort.
              */
-            if (null==project.getRepositoryLink() && null!=project.getFileName()) {
+            if (StringUtils.isEmptyOrNull(project.getRepositoryLink()) && 
+                !StringUtils.isEmptyOrNull(project.getFileName())) {
                 try {
                     p.setRepositoryType(Project.RepositoryType.File);
                     p.setCacheFolder(Extractor.uncompressArchive(project));
@@ -94,7 +95,7 @@ public class Archiver extends Thread {
                     em.getTransaction().commit();
                     return;
                 }
-            } else if (null!=project.getRepositoryLink()) {
+            } else if (!StringUtils.isEmptyOrNull(project.getRepositoryLink())) {
                 // try to Git it
                 try {
                     Path pathName = Paths
@@ -122,6 +123,8 @@ public class Archiver extends Thread {
                     em.getTransaction().commit();
                     return;
                 }
+            } else {
+                log.warn("Archiver Request with no action specified: " + project.getProjectId());
             }
             
             // post the changes
