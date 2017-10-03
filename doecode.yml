@@ -3,8 +3,6 @@
 
 ---
 repository_link: https://github.com/doecode/archiver
-access_limitations:
-- UNL
 developers:
 - first_name: Neal
   last_name: Ensor
@@ -38,8 +36,8 @@ acronym: archiver
 license: GNU General Public License
 description: > 
   A process to cache or clone various DOE-related software repositories for
-  hosting and backup on a local GitLab instance for DOECode support 
-  project.
+  hosting and backup on local storage to support archival requirements for
+  the DOECode main project.
 keywords: software, DOECode, hosting repositories
 disclaimers: open source
 recipient_name: Neal Ensor
@@ -47,6 +45,4 @@ recipient_email: ensorn@osti.gov
 recipient_phone: 865-576-1295
 recipient_org: DOE OSTI
 site_accession_number: '2893'
-other_special_requirements: gitlab
-related_software: linux, gitlab, bitbucket
 release_date: 2017-08-21
