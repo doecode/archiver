@@ -5,7 +5,7 @@ package gov.osti.archiver.services;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
-import gov.osti.archiver.Archiver;
+import gov.osti.archiver.entity.ArchiveRequest;
 import gov.osti.archiver.entity.Project;
 import gov.osti.archiver.listener.ServletContextListener;
 import gov.osti.archiver.util.Extractor;
@@ -17,6 +17,9 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import javax.persistence.EntityManager;
+import javax.persistence.NoResultException;
+import javax.persistence.PersistenceException;
+import javax.persistence.TypedQuery;
 import javax.ws.rs.Produces;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -66,17 +69,17 @@ public class ArchiveResource {
      * 200 - record found, returns JSON
      * 404 - record not on file
      * 
-     * @param codeId the CODE ID to look for
+     * @param projectId the CODE ID to look for
      * @return JSON of the Project if found
      */
     @GET
-    @Path ("{codeId}")
+    @Path ("{projectId}")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response find(@PathParam ("codeId") Long codeId) {
+    public Response find(@PathParam ("projectId") Long projectId) {
         EntityManager em = ServletContextListener.createEntityManager();
         
         try {
-            Project project = em.find(Project.class, codeId);
+            Project project = em.find(Project.class, projectId);
             
             // not found? say so.
             if (null==project)
@@ -126,94 +129,78 @@ public class ArchiveResource {
         EntityManager em = ServletContextListener.createEntityManager();
         
         try {
-            Project project = mapper.readValue(json, Project.class);
+            ArchiveRequest ar = mapper.readValue(json, ArchiveRequest.class);
             
             // must have a CODE_ID value
-            if (null==project.getCodeId())
+            if (null==ar.getCodeId())
                 return ErrorResponse
                         .badRequest("Missing required Code ID value.")
                         .build();
-            // must have at least a REPOSITORY LINK or FILE to process
-            if (null==project.getRepositoryLink() && null==file)
-                return ErrorResponse
-                        .badRequest("No repository link or file upload to cache.")
-                        .build();
             
-            // attempt to look up existing Project
-            Project p = em.find(Project.class, project.getCodeId());
+            //  construct a new PROJECT
+            Project project = new Project();
+            project.setRepositoryLink(ar.getRepositoryLink());
+            project.addCodeId(ar.getCodeId());
             
-            /**
-             * If the PROJECT is already on file, see if the repository link or
-             * file has not changed; if they have not, we're okay (return OK).
-             * Note that if a FILE is uploaded, we MUST assume that it's new, so
-             * we MUST treat it as if changes happened.  Also, if on-file Project
-             * is in Error status, assume this is re-submission and no longer valid.
-             * 
-             * If the PROJECTS aren't equivalent, we must:
-             * 1. REMOVE any GitLab associated files if present,
-             * 2. WIPE the PROJECT from the database,
-             * 3. and WIPE any files that may be uploaded for this project.
-             * 4. PROCESS this one as a new entry.
-             */
-            if (null!=p) {
-                // check against what's passed in to see if there were changes
-                // NOTE: If previous Project status was ERROR, assume we need to re-do
-                if ( StringUtils.equalsIgnoreCase(p.getRepositoryLink(), project.getRepositoryLink()) &&
-                     !Project.Status.Error.equals(p.getStatus()) &&
-                     null==file ) {
-                    // we haven't changed, so just return the DATABASE PROJECT
-                    return Response
-                            .status(Response.Status.OK)
-                            .entity(p.toJson())
-                            .build();
-                }
-                // call GitLab to REMOVE the existing project if needed
-                if (null!=p.getProjectId()) {
-                    // just call the GitLab API to DELETE existing Project record
-                    Archiver.callGitLabDelete(p);
-                }
-                // REMOVE the Project as well
-                em.getTransaction().begin();
-                em.remove(p);
-                em.getTransaction().commit();
-                // WIPE OUT any files we may have uploaded
-                wipeFiles(p.getCodeId());
-            }
-            
-            // start the persistence transaction
             em.getTransaction().begin();
             
-            // now we need to INSERT a new PROJECT
-            project.setStatus(Project.Status.Pending);
+            // do we have a REPOSITORY LINK?
+            if (null!=ar.getRepositoryLink()) {
+                // see if it's ALREADY been cached
+                TypedQuery<Project> query = em.createNamedQuery("Project.findByRepositoryLink", Project.class)
+                        .setParameter("url", ar.getRepositoryLink());
                 
-            /**
-             * for FILE UPLOADS, need to store in a new filesystem path,
-             * and set the information in the Project.
-             */
-            if ( null!=file && null!=fileInfo ) {
                 try {
-                    String fileName = saveFile(file, project.getCodeId(), fileInfo.getFileName());
-                    project.setFileName(fileName);
+                    Project p = query.getSingleResult();
                     
-                    try {
-                        if (null==Extractor.detectArchiveFormat(fileName))
-                            throw new ArchiveException ("Invalid or unknown archive format.");
-                    } catch ( ArchiveException e ) {
-                        log.warn("Invalid Archive for " + fileName + ": " + e.getMessage());
-                        return ErrorResponse
-                                .badRequest("Unrecognized archive file type, unsupported format.")
-                                .build();
+                    // may need to add this CODE ID if multiple projects post to this
+                    if ( p.addCodeId(ar.getCodeId()) ) {
+                        // added one, merge it in
+                        em.merge(p);
+                        em.getTransaction().commit();
                     }
+                    
+                    // found it, send it back
+                    return Response
+                            .ok()
+                            .entity(p.toJson())
+                            .build();
+                } catch ( NoResultException e ) {
+                    // this is expected if not on file already, proceed
+                }
+                // no such thing, go ahead and create a PROJECT to hold this
+                project.setStatus(Project.Status.Pending);
+                
+                em.persist(project); // get the UUID
+                
+            } else if (null!=file) {
+                // we have a FILE to do; create a PROJECT and store it
+                em.persist(project); // get us a PROJECT ID
+                
+                // attempt to store and extract the archive file
+                try {
+                    String fileName = saveFile(file, project.getProjectId(), fileInfo.getFileName());
+                    project.setFileName(fileName);
+                    // ensure we can tell what sort of archive we have
+                        if (null==Extractor.detectArchiveFormat(fileName))
+                            throw new ArchiveException("Invalid or unknown archive format.");
+                } catch ( ArchiveException e ) {
+                    log.warn("Invalid Archive for " + fileInfo.getFileName() + ": " + e.getMessage());
+                    return ErrorResponse
+                            .badRequest("Unrecognized archive file type, unsupported format.")
+                            .build();
                 } catch ( IOException e ) {
                     log.error ("File Upload Failed: " + e.getMessage());
                     return ErrorResponse
                             .internalServerError("File upload operation failed.")
                             .build();
                 }
+            } else {
+                return ErrorResponse
+                        .badRequest("Missing required parameters.")
+                        .build();
             }
-
-            em.persist(project);
-
+            // got this far, we must be ready to call the background thread
             em.getTransaction().commit();
 
             // fire off the background thread
@@ -229,7 +216,14 @@ public class ArchiveResource {
             return ErrorResponse
                     .internalServerError("JSON parsing error.")
                     .build();
+        } catch ( PersistenceException e ) {
+            log.warn("Database Error: ",e);
+            return ErrorResponse
+                    .internalServerError("Database persistence error.")
+                    .build();
         } finally {
+            if (em.getTransaction().isActive())
+                em.getTransaction().rollback();
             em.close();
         }
     }
@@ -287,14 +281,14 @@ public class ArchiveResource {
     /**
      * Store a given File InputStream to a new base absolute path.
      * @param in the InputStream containing the File
-     * @param codeId the CODE ID of the DOECODE Project to associate with
+     * @param projectId the CODE ID of the DOECODE Project to associate with
      * @param fileName the base file name to use
      * @throws IOException on IO errors
      * @return the new File name complete path
      */
-    private static String saveFile(InputStream in, Long codeId, String fileName) throws IOException {
+    private static String saveFile(InputStream in, Long projectId, String fileName) throws IOException {
         // store this file in a designated base path
-        java.nio.file.Path destination = Paths.get(FILE_BASEDIR, String.valueOf(codeId), fileName);
+        java.nio.file.Path destination = Paths.get(FILE_BASEDIR, String.valueOf(projectId), fileName);
         // make the necessary file paths
         Files.createDirectories(destination.getParent());
         // save it

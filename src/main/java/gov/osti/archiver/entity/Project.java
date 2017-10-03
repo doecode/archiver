@@ -2,6 +2,8 @@
  */
 package gov.osti.archiver.entity;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,71 +12,60 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Serializable;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
+import javax.persistence.Basic;
+import javax.persistence.CollectionTable;
 import javax.persistence.Column;
+import javax.persistence.ElementCollection;
 import javax.persistence.Entity;
 import javax.persistence.EnumType;
 import javax.persistence.Enumerated;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import javax.persistence.JoinColumn;
+import javax.persistence.NamedQueries;
+import javax.persistence.NamedQuery;
+import javax.persistence.PrePersist;
+import javax.persistence.PreUpdate;
 import javax.persistence.Table;
+import javax.persistence.Temporal;
+import javax.persistence.TemporalType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * The ARCHIVER Project entity.
  * 
- * Contains relevant information from DOECode software project for archiving
- * purposes to GitLab.
+ * Archive/Cache software project information on local filesystem storage.
  * 
- * GitLab-relevant restrictions:
- * 2000 character limit on description
- * project name must consist of alphanumeric, _, ., or space characters ONLY
+ * FILES archive as-is; REPOSITORY caches extract/clone/checkout via GIT, SVN, or HG.
+ * Keep the latter updated on a daily basis optionally via scripts.
+ * 
+ * PROJECT has a unique ID; the REPOSITORY LINK value is effectively UNIQUE; if 
+ * the value is found already, the project is assumed to already be "cached" and
+ * is thus skipped.
  * 
  * @author ensornl
  */
 @Entity
 @Table (name = "ARCHIVE_PROJECT")
 @JsonIgnoreProperties (ignoreUnknown = true)
+@NamedQueries ({
+    @NamedQuery (name = "Project.findByRepositoryLink", query = "SELECT p FROM Project p WHERE UPPER(p.repositoryLink) = UPPER(:url)"),
+    @NamedQuery (name = "Project.findById", query = "SELECT p FROM Project p WHERE p.projectId = :id")
+})
 public class Project implements Serializable {
     // logger
     private static final Logger log = LoggerFactory.getLogger(Project.class);
-
-    // constants
-    protected static final int PROJECT_MAX_LENGTH = 2000;
-    protected static final String PROJECT_NAME_FILTER = "[^\\w\\s._]";
     
     // Jackson object mapper
     private static final ObjectMapper mapper = new ObjectMapper()
             .setPropertyNamingStrategy(PropertyNamingStrategy.SNAKE_CASE)
             .setSerializationInclusion(JsonInclude.Include.NON_NULL);
     
-    /**
-     * @return the codeId
-     */
-    public Long getCodeId() {
-        return codeId;
-    }
-
-    /**
-     * @param codeId the codeId to set
-     */
-    public void setCodeId(Long codeId) {
-        this.codeId = codeId;
-    }
-
-    /**
-     * @return the projectId
-     */
-    public Integer getProjectId() {
-        return projectId;
-    }
-
-    /**
-     * @param projectId the projectId to set
-     */
-    public void setProjectId(Integer projectId) {
-        this.projectId = projectId;
-    }
-
     /**
      * @return the repositoryLink
      */
@@ -108,46 +99,6 @@ public class Project implements Serializable {
     }
 
     /**
-     * @return the projectName
-     */
-    public String getProjectName() {
-        return projectName;
-    }
-
-    /**
-     * Remove restricted characters from Project Name.  Add "_codeId" to make
-     * unique, if set.
-     * 
-     * @param projectName the projectName to set
-     */
-    public void setProjectName(String projectName) {
-        this.projectName = (null==projectName) ?
-                null :
-                projectName.replaceAll(PROJECT_NAME_FILTER, "") +
-                ((null==getCodeId()) ? "" : "_" + String.valueOf(getCodeId()));
-    }
-
-    /**
-     * Get the Project Description
-     * 
-     * @return the projectDescription
-     */
-    public String getProjectDescription() {
-        return projectDescription;
-    }
-
-    /**
-     * Store the Project Description (limit to 2000 characters).
-     * 
-     * @param projectDescription the projectDescription to set
-     */
-    public void setProjectDescription(String projectDescription) {
-        this.projectDescription = (null!=projectDescription) ?
-                (projectDescription.length()>PROJECT_MAX_LENGTH) ? projectDescription.substring(0,PROJECT_MAX_LENGTH) : projectDescription :
-                null;
-    }
-
-    /**
      * @return the status
      */
     public Status getStatus() {
@@ -160,11 +111,91 @@ public class Project implements Serializable {
     public void setStatus(Status status) {
         this.status = status;
     }
+
+    /**
+     * @return the projectId
+     */
+    public Long getProjectId() {
+        return projectId;
+    }
+
+    /**
+     * @param projectId the projectId to set
+     */
+    public void setProjectId(Long projectId) {
+        this.projectId = projectId;
+    }
+
+    /**
+     * @return the codeIds
+     */
+    public Set<Long> getCodeIds() {
+        return codeIds;
+    }
+
+    /**
+     * @param codeIds the codeIds to set
+     */
+    public void setCodeIds(Set<Long> codeIds) {
+        this.codeIds = codeIds;
+    }
+    
+    public boolean addCodeId(Long id) {
+        return codeIds.add(id);
+    }
+
+    /**
+     * The FILESYSTEM area in which the information is cached/stored.  Should
+     * NOT be emitted on JSON calls.
+     * 
+     * @return the cacheFolder the absolute filesystem location for the cached
+     * files
+     */
+    @JsonIgnore
+    public String getCacheFolder() {
+        return cacheFolder;
+    }
+
+    /**
+     * @param cacheFolder the cacheFolder to set
+     */
+    public void setCacheFolder(String cacheFolder) {
+        this.cacheFolder = cacheFolder;
+    }
+    
+    /**
+     * Differing status values of the Project.
+     */
     public enum Status {
         Pending,
         Processing,
         Error,
         Complete
+    }
+    
+    /**
+     * Get the TYPE of repository link, if applicable
+     * @return the TYPE
+     */
+    public RepositoryType getRepositoryType(){
+        return repositoryType;
+    }
+    
+    /**
+     * Set the TYPE of repository
+     * @param t the TYPE to set
+     */
+    public void setRepositoryType(RepositoryType t) {
+        repositoryType = t;
+    }
+    
+    /**
+     * Supported REPOSITORY TYPE values.
+     */
+    public enum RepositoryType {
+        Git,
+        Subversion,
+        File
     }
     
     public void setStatusMessage(String msg) {
@@ -175,24 +206,95 @@ public class Project implements Serializable {
         return (null==statusMessage) ? "" : statusMessage.trim();
     }
     
+    /**
+     * @return the dateRecordAdded
+     */
+    public Date getDateRecordAdded() {
+        return dateRecordAdded;
+    }
+
+    /**
+     * @param dateRecordAdded the dateRecordAdded to set
+     */
+    public void setDateRecordAdded(Date dateRecordAdded) {
+        this.dateRecordAdded = dateRecordAdded;
+    }
+
+    public void setDateRecordAdded () {
+        setDateRecordAdded(new Date());
+    }
+
+    /**
+     * @return the dateRecordUpdated
+     */
+    public Date getDateRecordUpdated() {
+        return dateRecordUpdated;
+    }
+
+    /**
+     * @param dateRecordUpdated the dateRecordUpdated to set
+     */
+    public void setDateRecordUpdated(Date dateRecordUpdated) {
+        this.dateRecordUpdated = dateRecordUpdated;
+    }
+
+    public void setDateRecordUpdated() {
+        setDateRecordUpdated(new Date());
+    }
+
+    /**
+     * Method called when a record is first created.  Sets dates added and
+     * updated.
+     */
+    @PrePersist
+    void createdAt() {
+        setDateRecordAdded();
+        setDateRecordUpdated();
+    }
+
+    /**
+     * Method called when the record is updated.
+     */
+    @PreUpdate
+    void updatedAt() {
+        setDateRecordUpdated();
+    }
+        
+    // ATTRIBUTES
+    
     @Id
-    @Column (name = "code_id")
-    private Long codeId; // key from DOECODE database
     @Column (name = "project_id")
-    private Integer projectId; // key into GITLAB instance
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long projectId;
     @Column (length = 1000, name = "repository_link")
     private String repositoryLink;
     @Column (length = 1000, name = "file_name")
     private String fileName;
-    @Column (length = 1000, name = "project_name")
-    private String projectName;
-    @Column (length = 2000, name = "project_description")
-    private String projectDescription;
     @Column (length = 50, name = "status")
     @Enumerated (EnumType.STRING)
     private Status status = Status.Pending; // default value
     @Column (length = 2000, name = "status_message")
     private String statusMessage;
+    @Column (length = 20, name = "repository_type")
+    @Enumerated (EnumType.STRING)
+    private RepositoryType repositoryType = RepositoryType.Git;
+    // administrative dates
+    @JsonFormat (shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd", timezone = "EST")
+    @Basic(optional = false)
+    @Column(name = "date_record_added", insertable = true, updatable = false)
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date dateRecordAdded;
+    @JsonFormat (shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd", timezone = "EST")
+    @Basic(optional = false)
+    @Column(name = "date_record_updated", insertable = true, updatable = true)
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date dateRecordUpdated;
+    @ElementCollection
+    @CollectionTable (name = "archive_project_xref",
+            joinColumns = @JoinColumn (name = "project_id"))
+    private Set<Long> codeIds = new HashSet<>();
+    @Column(name = "cache_folder", length = 1000)
+    private String cacheFolder;
     
     /**
      * Parses JSON in the request body of the reader into a Project object.

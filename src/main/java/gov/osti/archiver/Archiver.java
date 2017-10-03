@@ -6,22 +6,14 @@ import gov.osti.archiver.entity.Project;
 import gov.osti.archiver.listener.ServletContextListener;
 import gov.osti.archiver.util.Extractor;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import javax.persistence.EntityManager;
 import org.apache.commons.compress.archivers.ArchiveException;
-import org.apache.http.HttpStatus;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpDelete;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.util.EntityUtils;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,61 +27,26 @@ import org.slf4j.LoggerFactory;
 public class Archiver extends Thread {
     // logger
     private static Logger log = LoggerFactory.getLogger(Archiver.class);
+    // base filesystem path to save information into
+    private static String FILE_BASEDIR = ServletContextListener.getConfigurationProperty("file.archive");
     // the Project to archive
     private Project project;
-    // configuration parameters
-    private static String GITLAB_URL = ServletContextListener.getConfigurationProperty("gitlab.url");
-    private static String GITLAB_APIKEY = ServletContextListener.getConfigurationProperty("gitlab.apikey");
-    private static String GITLAB_API_BASE = "/api/v3/projects";
-    private static String DEFAULT_VISIBILITY = "internal";
     
     public Archiver(Project p) {
         project = p;
     }
     
     /**
-     * Call GitLab to REMOVE a given PROJECT from its repositories.  Based on the
-     * PROJECT ID value present.
-     * 
-     * @param project the PROJECT to remove
-     * @return true if DELETE was successful, false if not
-     * @throws IOException on IO errors
-     */
-    public static boolean callGitLabDelete(Project project) throws IOException {
-        CloseableHttpClient hc =
-                HttpClientBuilder
-                .create()
-                .setDefaultRequestConfig(RequestConfig
-                        .custom()
-                        .setSocketTimeout(5000)
-                        .setConnectTimeout(5000)
-                        .build())
-                .build();
-        
-        try {
-            // call DELETE operation based on PROJECT ID value
-            HttpDelete request = new HttpDelete(GITLAB_URL + GITLAB_API_BASE +"/"+ project.getProjectId());
-            request.addHeader("PRIVATE-TOKEN", GITLAB_APIKEY);
-            
-            CloseableHttpResponse response = hc.execute(request);
-            
-            int statusCode = response.getStatusLine().getStatusCode();
-            
-            if (HttpStatus.SC_OK!=statusCode) {
-                log.warn("GitLab DELETE Error Code: " + statusCode);
-                log.warn("Message: " + EntityUtils.toString(response.getEntity()));
-                return false;
-            }
-        } finally {
-            hc.close();
-        }
-        
-        return true;
-    }
-    
-    /**
      * Perform the Archiving jobs to get Project into GitLab.
      * 
+     * For FILE UPLOADS:
+     * 1. unpack into a folder
+     * 2. create a git repository bare on it
+     * 3. done
+     * 
+     * For REPOSITORY UPLOADS:
+     * 1. call external processes to attempt to download/cache/mirror
+     * 2. done
      * 
      */
     @Override
@@ -99,35 +56,15 @@ public class Archiver extends Thread {
             log.warn("No Project information set to archive.");
             return;
         }
-        
-        // must have a GITLAB URL
-        if ("".equals(GITLAB_URL)) {
-            log.warn("GitLab archive instance not set up properly.");
-            return;
-        }
         // database interface
         EntityManager em = ServletContextListener.createEntityManager();
-        // for API communications
-        CloseableHttpClient hc =
-                HttpClientBuilder
-                .create()
-                .setDefaultRequestConfig(RequestConfig
-                        .custom()
-                        .setSocketTimeout(30000)
-                        .setConnectTimeout(30000)
-                        .build())
-                .build();
+        
         try {
             // attempt to look up the Project
-            Project p = em.find(Project.class, project.getCodeId());
+            Project p = em.find(Project.class, project.getProjectId());
             
             if (null==p) {
-                log.warn("Project " + project.getCodeId() + " is not on file.");
-                return;
-            }
-            // if PROJECT already exists on GITLAB (project ID is set) abort
-            if (null!=p.getProjectId()) {
-                log.info ("Project CODE ID " + p.getCodeId() + " is already on GitLab #" + p.getProjectId());
+                log.warn("Project " + project.getProjectId() + " is not on file.");
                 return;
             }
             
@@ -146,7 +83,8 @@ public class Archiver extends Thread {
              */
             if (null==project.getRepositoryLink() && null!=project.getFileName()) {
                 try {
-                    project.setRepositoryLink(Extractor.uncompressArchive(project));
+                    p.setRepositoryType(Project.RepositoryType.File);
+                    p.setCacheFolder(Extractor.uncompressArchive(project));
                 } catch ( IOException | ArchiveException e ) {
                     log.warn("Archive extraction error: "+ e.getMessage());
                     p.setStatus(Project.Status.Error);
@@ -155,57 +93,63 @@ public class Archiver extends Thread {
                     em.getTransaction().commit();
                     return;
                 }
+            } else if (null!=project.getRepositoryLink()) {
+                // try to Git it
+                try {
+                    Path pathName = Paths
+                            .get(FILE_BASEDIR, String.valueOf(project.getProjectId()), getFolderFor(project));
+                    p.setCacheFolder(pathName.toString());
+                    Git git = Git
+                            .cloneRepository()
+                            .setURI(project.getRepositoryLink())
+                            .setDirectory(Files.
+                                    createDirectories(pathName).toFile())
+                            .setCloneAllBranches(true)
+                            .call();
+                } catch ( IOException e ) {
+                    log.warn("Git IO Error: " + e.getMessage());
+                    p.setStatus(Project.Status.Error);
+                    p.setStatusMessage("Checkout IO Error");
+                    em.persist(p);
+                    em.getTransaction().commit();
+                    return;
+                } catch ( GitAPIException e ) {
+                    log.warn("Git API Error: " + e.getMessage());
+                    p.setStatus(Project.Status.Error);
+                    p.setStatusMessage("Git retrieve failed: " + e.getMessage());
+                    em.persist(p);
+                    em.getTransaction().commit();
+                    return;
+                }
             }
             
-            // attempt to post this to GITLAB
-            HttpPost request = new HttpPost(GITLAB_URL + GITLAB_API_BASE);
-            request.addHeader("PRIVATE-TOKEN", GITLAB_APIKEY);
-
-            List<NameValuePair> parameters = new ArrayList<>();
-            parameters.add(new BasicNameValuePair("visibility", DEFAULT_VISIBILITY));
-            parameters.add(new BasicNameValuePair("name", project.getProjectName()));
-            parameters.add(new BasicNameValuePair("description", project.getProjectDescription()));
-            parameters.add(new BasicNameValuePair("import_url", project.getRepositoryLink()));
-            request.setEntity(new UrlEncodedFormEntity(parameters));
+            // post the changes
+            p.setStatus(Project.Status.Complete);
+            p.setStatusMessage("CREATED");
+            em.persist(p);
             
-            CloseableHttpResponse response = hc.execute(request);
-
-            if ( HttpStatus.SC_CREATED==response.getStatusLine().getStatusCode() ) {
-                Repository message = Repository.fromJson(EntityUtils.toString(response.getEntity()));
-                // store the information needed
-                p.setProjectId(message.getId());
-                // if GitLab imported better information, use it
-                if (null==p.getProjectDescription())
-                    p.setProjectDescription(message.getDescription());
-                if (null==p.getProjectName())
-                    p.setProjectName(message.getName());
-                p.setStatusMessage("CREATED");
-                p.setStatus(Project.Status.Complete);
-                em.persist(p);
-            } else {
-                ErrorMessage errors = ErrorMessage.fromJson(EntityUtils.toString(response.getEntity()));
-
-                // report the error message
-                log.error("Error posting to GitLab: " + errors.getErrorMessage());
-
-                p.setStatus(Project.Status.Error);
-                p.setStatusMessage(errors.getErrorMessage());
-                em.persist(p);
-            }
             em.getTransaction().commit();
-        } catch ( UnsupportedOperationException | UnsupportedEncodingException e ) {
-            log.error("URL Encoding Error: " + e.getMessage());
-        } catch ( IOException e ) {
-            log.error("GitLab Communication Error: " + e.getMessage());
         } finally {
             // dispose of the EntityManager
             em.close();
-            // close the HTTP API channel
-            try {
-                hc.close();
-            } catch ( IOException e ) {
-                log.warn("HTTP Close Error: " + e.getMessage());
-            }
+        }
+    }
+    
+    /**
+     * Obtain a named sub-folder for caching based on either FILE NAME or
+     * REPOSITORY LINK values.
+     * 
+     * @param p the PROJECT
+     * @return a FILE NAME for sub-folder purposes to cache in
+     */
+    protected static String getFolderFor(Project p) {
+        if (null!=p.getFileName()) {
+            return Paths.get(p.getFileName()).getFileName().toString();
+        } else {
+            String repoUrl = (StringUtils.isEmptyOrNull(p.getRepositoryLink())) ? "" : p.getRepositoryLink();
+            String[] parts = repoUrl.split("/");
+            
+            return (parts.length>0) ? parts[parts.length-1] : "";
         }
     }
 }

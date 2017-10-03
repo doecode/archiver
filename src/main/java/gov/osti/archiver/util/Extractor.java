@@ -32,8 +32,6 @@ public class Extractor {
     private static Logger log = LoggerFactory.getLogger(Extractor.class);
     // base file folder containing archive uploads
     private static String FILE_BASEDIR = ServletContextListener.getConfigurationProperty("file.archive");
-    // get the GITLAB prefix URL for local uploads
-    private static String GITLAB_LOCALURL = ServletContextListener.getConfigurationProperty("gitlab.localurl");
     
     /**
      * Attempt to open an ArchiveInputStream based on the file_name specified.
@@ -113,7 +111,7 @@ public class Extractor {
             throw new IOException ("Unable to read project file name.");
         // construct a UNIQUE FILE PATH to extract files into
         java.nio.file.Path base_file_path = Paths.get(FILE_BASEDIR, 
-                String.valueOf(project.getCodeId()), 
+                String.valueOf(project.getProjectId()), 
                 UUID.randomUUID().toString());
         // use BASE FILE PATH (including NAME) as the EXTRACTION FOLDER
         File parent_folder = base_file_path.toFile();
@@ -161,8 +159,7 @@ public class Extractor {
             log.warn("Git failed: " + e.getMessage());
             throw new IOException ("Repository import failure: " + e.getMessage());
         }
-        
-        // send back an IMPORT URL for local git repository import to GITLAB
-        return GITLAB_LOCALURL + base_file_path.toString();
+        // send back the file path created
+        return base_file_path.toString();
     }
 }
