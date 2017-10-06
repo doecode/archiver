@@ -145,7 +145,7 @@ public class ArchiveResource {
     }
     
     /**
-     * Obtain a listing of any Projects in Error condition.
+     * Obtain a listing of any Projects in a given status condition.
      * 
      * @param status the Status code to use ("Error", "Pending", or "Complete")
      * @return JSON containing an array of Project records in status, if any.
@@ -153,7 +153,7 @@ public class ArchiveResource {
     @GET
     @Path ("/status/{status}")
     @Produces (MediaType.APPLICATION_JSON)
-    public Response findErrors(@PathParam("status") String status) {
+    public Response findByStatus(@PathParam("status") String status) {
         EntityManager em = ServletContextListener.createEntityManager();
         
         try {
