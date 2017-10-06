@@ -34,7 +34,6 @@ import javax.persistence.PreUpdate;
 import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
-import org.eclipse.jgit.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +56,8 @@ import org.slf4j.LoggerFactory;
 @JsonIgnoreProperties (ignoreUnknown = true)
 @NamedQueries ({
     @NamedQuery (name = "Project.findByRepositoryLink", query = "SELECT p FROM Project p WHERE UPPER(p.repositoryLink) = UPPER(:url)"),
-    @NamedQuery (name = "Project.findById", query = "SELECT p FROM Project p WHERE p.projectId = :id")
+    @NamedQuery (name = "Project.findById", query = "SELECT p FROM Project p WHERE p.projectId = :id"),
+    @NamedQuery (name = "Project.findByCodeId", query = "SELECT p FROM Project p WHERE p.codeIds = :ids")
 })
 public class Project implements Serializable {
     // logger

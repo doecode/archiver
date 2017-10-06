@@ -16,6 +16,9 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import javax.persistence.PersistenceException;
@@ -29,7 +32,6 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import org.apache.commons.compress.archivers.ArchiveException;
-import org.eclipse.jgit.util.StringUtils;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
@@ -91,6 +93,51 @@ public class ArchiveResource {
             return Response
                     .status(Response.Status.OK)
                     .entity(project.toJson())
+                    .build();
+        } finally {
+            em.close();
+        }
+    }
+    
+    /**
+     * Query for any PROJECT mapping to the indicated CODE ID from DOECODE.
+     * 
+     * Returns:
+     * 200 - JSON containing referencing project(s)
+     * 404 - No project found mapping to the indiciated CODE ID
+     * 500 - JSON or database processing error
+     * 
+     * @param codeId the CODE ID value to search for
+     * @return a Response containing the information
+     */
+    @GET
+    @Path ("/codeid/{codeId}")
+    @Produces (MediaType.APPLICATION_JSON)
+    public Response findByCodeId(@PathParam ("codeId") Long codeId) {
+        EntityManager em = ServletContextListener.createEntityManager();
+        
+        try {
+            // create a Set containing the CODE ID
+            Set<Long> ids = new HashSet<>();
+            ids.add(codeId);
+            // Query it up
+            TypedQuery<Project> query = em.createNamedQuery("Project.findByCodeId", Project.class)
+                    .setParameter("ids", ids);
+            List<Project> results = query.getResultList();
+            
+            // if no records match, return a Not Found response; otherwise, JSON
+            return ( 0==results.size() ) ?
+                    ErrorResponse
+                    .notFound("Code ID not found.")
+                    .build() :
+                    Response
+                    .ok()
+                    .entity(mapper.writeValueAsString(results))
+                    .build();
+        } catch ( IOException e ) {
+            log.warn("JSON parser error", e);
+            return ErrorResponse
+                    .internalServerError("JSON mapping error")
                     .build();
         } finally {
             em.close();
