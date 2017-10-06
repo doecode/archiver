@@ -145,20 +145,56 @@ public class ArchiveResource {
     }
     
     /**
+     * Obtain a listing of any Projects in Error condition.
+     * 
+     * @param status the Status code to use ("Error", "Pending", or "Complete")
+     * @return JSON containing an array of Project records in status, if any.
+     */
+    @GET
+    @Path ("/status/{status}")
+    @Produces (MediaType.APPLICATION_JSON)
+    public Response findErrors(@PathParam("status") String status) {
+        EntityManager em = ServletContextListener.createEntityManager();
+        
+        try {
+            TypedQuery<Project> query = em.createNamedQuery("Project.findByStatus", Project.class)
+                    .setParameter("status", Project.Status.valueOf(status));
+            List<Project> results = query.getResultList();
+            
+            return Response
+                    .ok()
+                    .entity(mapper.writeValueAsString(results))
+                    .build();
+        } catch ( IllegalArgumentException e ) {
+            return ErrorResponse
+                    .badRequest("Unknown status type " + status)
+                    .build();
+        } catch ( IOException e ) {
+            log.warn("JSON Error", e);
+            return ErrorResponse
+                    .internalServerError("JSON processing error.")
+                    .build();
+        } finally {
+            em.close();
+        }
+    }
+    
+    /**
      * Perform ARCHIVING of a given PROJECT.
      * 
      * Passed-in JSON should contain a CODE_ID from DOECODE, a PROJECT NAME,
      * PROJECT DESCRIPTION, and one of REPOSITORY LINK or FILE NAME.  If the former,
-     * directly import into the GitLab archive; if the latter, extra steps need to be
+     * directly import into the archive; if the latter, extra steps need to be
      * taken to extract the file (assumed to be a compressed archive) into a holding
-     * area, a git repository made of its content, and import THAT as a local
-     * operation into GitLab.
+     * area, a git repository made of its content.
      * 
      * Procedure:
-     * 1. attempt to look up the PROJECT based on CODE_ID.
-     * 2. if present, DELETE that PROJECT and start anew. (Drop from GitLab also if present there).
-     * 3. if not, or DELETED, go ahead and insert a PENDING PROJECT record.
-     * 4. hand off to worker thread to do the file operations and import into GitLab.
+     * 1. look up the REPOSITORY LINK value if supplied.
+     * 2. if found, add this CODE ID to its mapping, done.
+     * 3. if not, create a PROJECT and attempt to git-import the content to cache. (separate thread)
+     * 
+     * File uploads are considered to be new entities each time, so a new PROJECT 
+     * is always created.
      * 
      * Response Codes:
      * 200 - Project already archived (no changes to repository or file), returns JSON
@@ -276,12 +312,7 @@ public class ArchiveResource {
     }
     
     /**
-     * POST a Project to be archived.  If the CODE ID is already on file, does 
-     * nothing.  If not, create an initial Project entity in the database, and
-     * spin off an archiving Thread to handle import into GitLab.
-     * 
-     * Note that this ALWAYS persists a new PROJECT, as we cannot determine
-     * if the file is the same or not as previously uploaded.
+     * POST a Project to be archived.  
      * 
      * Response Code:
      * 201 -- created new Project, OK

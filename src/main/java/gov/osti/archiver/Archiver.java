@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Archive worker Thread.
  * 
- * Attempts to import a given Project into GitLab if possible.
+ * Attempts to cache a given Project if possible.
  * 
  * @author ensornl
  */
@@ -38,7 +38,7 @@ public class Archiver extends Thread {
     }
     
     /**
-     * Perform the Archiving jobs to get Project into GitLab.
+     * Perform the Archiving jobs to get Project.
      * 
      * For FILE UPLOADS:
      * 1. unpack into a folder
@@ -74,8 +74,7 @@ public class Archiver extends Thread {
             
             /**
              * File uploads are to be extracted to a temporary folder, a git 
-             * repository created from the contents, then that used as import URL
-             * material for GitLab.
+             * repository created from the contents.
              * 
              * Handled in the Extractor.  What comes back should be the base file
              * path for the newly-created git repository from the archive contents.
