@@ -58,7 +58,8 @@ import org.slf4j.LoggerFactory;
     @NamedQuery (name = "Project.findByRepositoryLink", query = "SELECT p FROM Project p WHERE UPPER(p.repositoryLink) = UPPER(:url)"),
     @NamedQuery (name = "Project.findById", query = "SELECT p FROM Project p WHERE p.projectId = :id"),
     @NamedQuery (name = "Project.findByCodeId", query = "SELECT p FROM Project p WHERE p.codeIds = :ids"),
-    @NamedQuery (name = "Project.findByStatus", query = "SELECT p FROM Project p WHERE p.status = :status")
+    @NamedQuery (name = "Project.findByStatus", query = "SELECT p FROM Project p WHERE p.status = :status"),
+    @NamedQuery (name = "Project.findByType", query = "SELECT p FROM Project p WHERE p.repositoryType = :type and p.status = :status")
 })
 public class Project implements Serializable {
     // logger

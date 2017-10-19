@@ -9,15 +9,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.UUID;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveException;
 import org.apache.commons.compress.archivers.ArchiveInputStream;
 import org.apache.commons.compress.archivers.ArchiveStreamFactory;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.errors.GitAPIException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,12 +84,11 @@ public class Extractor {
     
     /**
      * Given a Project with a FileName attached, attempt to uncompress the
-     * archive file into a sub-folder and create a git repository from its
-     * contents.
+     * archive file into a sub-folder.
      * 
      * Filename is considered to be an absolute path; contents will be 
-     * uncompressed into a folder based on the configured FILE BASEDIR value,
-     * supplemented by the Project CODE ID and base file name.
+     * uncompressed into a folder based on the configured FILE BASEDIR value and
+     * PROJECT ID.  Each PROJECT is considered to be a UNIQUE archive area.
      * 
      * @param project the Project in question
      * @return the filename path to the git repository created, or null if
@@ -103,24 +100,13 @@ public class Extractor {
         if (null==project.getFileName())
             return null;
         
-        // the project FILE NAME
-        String file_name = project.getFileName();
-        // get the BASE
-        File base_file = new File(file_name);
-        if (!base_file.exists())
-            throw new IOException ("Unable to read project file name.");
-        // construct a UNIQUE FILE PATH to extract files into
-        java.nio.file.Path base_file_path = Paths.get(FILE_BASEDIR, 
-                String.valueOf(project.getProjectId()), 
-                UUID.randomUUID().toString());
-        // use BASE FILE PATH (including NAME) as the EXTRACTION FOLDER
-        File parent_folder = base_file_path.toFile();
-        // ABORT if PARENT FOLDER EXISTS; might already be contents
-        if (parent_folder.exists())
-            throw new IOException ("Extraction folder already exists.");
-        // attempt to create folder structure
-        if (!parent_folder.mkdirs())
-            throw new IOException ("Unable to create archive folder for extraction.");
+        // uncompress the archive into the PROJECT folder
+        Path base_file_path = Paths.get(
+                FILE_BASEDIR,
+                String.valueOf(project.getProjectId()));
+        File folder = base_file_path.toFile();
+        if (!folder.exists())
+            throw new IOException ("Extraction folder does not exist.");
         
         // open the archiver stream
         ArchiveInputStream in = openArchiveStream(project.getFileName());
@@ -137,28 +123,18 @@ public class Extractor {
                 if (!base_file_path.resolve(entry.getName()).toFile().mkdirs())
                     throw new IOException ("Unable to create folder: " + entry.getName());
             } else {
+                // might contain a directory reference
+                if (!base_file_path.resolve(entry.getName()).startsWith(base_file_path))
+                    throw new IOException ("Illegal relative or absolute path in file.");
+                // create any intervening file paths necessary if applicable
+                File parent = base_file_path.resolve(entry.getName()).toFile().getParentFile();
+                if (!parent.exists() && !parent.mkdirs())
+                    throw new IOException ("Unable to create folder for file: " + entry.getName());
                 // extract file
                 Files.copy(in, base_file_path.resolve(entry.getName()));
             }
         }
         
-        // Create a bare GIT repository from the archive content just unpacked
-        try {
-            // init the Git repository
-            Git git = Git
-                    .init()
-                    .setDirectory(base_file_path.toFile())
-                    .call();
-            // add the entire contents of the folder
-            git.add().addFilepattern(".").call();
-            // commit it
-            git.commit().setMessage("Initial import").call();
-            // finished
-            git.close();
-        } catch ( GitAPIException e ) {
-            log.warn("Git failed: " + e.getMessage());
-            throw new IOException ("Repository import failure: " + e.getMessage());
-        }
         // send back the file path created
         return base_file_path.toString();
     }

@@ -32,7 +32,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import org.apache.commons.compress.archivers.ArchiveException;
-import org.glassfish.jersey.media.multipart.FormDataBodyPart;
+import org.eclipse.jgit.util.StringUtils;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
 import org.slf4j.Logger;
@@ -228,7 +228,10 @@ public class ArchiveResource {
             em.getTransaction().begin();
             
             // do we have a REPOSITORY LINK?
-            if (null!=ar.getRepositoryLink()) {
+            if (!StringUtils.isEmptyOrNull(ar.getRepositoryLink())) {
+                // FORCE protocol if not present
+                if (!ar.getRepositoryLink().startsWith("http"))
+                    ar.setRepositoryLink("https://" + ar.getRepositoryLink());
                 // see if it's ALREADY been cached
                 TypedQuery<Project> query = em.createNamedQuery("Project.findByRepositoryLink", Project.class)
                         .setParameter("url", ar.getRepositoryLink());
@@ -265,8 +268,8 @@ public class ArchiveResource {
                     String fileName = saveFile(file, project.getProjectId(), fileInfo.getFileName());
                     project.setFileName(fileName);
                     // ensure we can tell what sort of archive we have
-                        if (null==Extractor.detectArchiveFormat(fileName))
-                            throw new ArchiveException("Invalid or unknown archive format.");
+                    if (null==Extractor.detectArchiveFormat(fileName))
+                        throw new ArchiveException("Invalid or unknown archive format.");
                 } catch ( ArchiveException e ) {
                     log.warn("Invalid Archive for " + fileInfo.getFileName() + ": " + e.getMessage());
                     return ErrorResponse
@@ -311,6 +314,31 @@ public class ArchiveResource {
         }
     }
     
+    @GET
+    @Produces (MediaType.APPLICATION_JSON)
+    @Path ("/update/{projectId}")
+    public Response update(@PathParam("projectId") Long projectId) {
+        EntityManager em = ServletContextListener.createEntityManager();
+        
+        try {
+            Project p = em.find(Project.class, projectId);
+            
+            if (null==p) {
+                return ErrorResponse
+                        .notFound("Project not on file.")
+                        .build();
+            }
+            ServletContextListener.callSync(p);
+            
+            return Response
+                    .ok()
+                    .entity(mapper.createObjectNode().put("project", projectId).put("status", "OK").toString())
+                    .build();
+        } finally {
+            em.close();
+        }
+    }
+    
     /**
      * POST a Project to be archived.  
      * 
@@ -329,11 +357,11 @@ public class ArchiveResource {
     @Consumes (MediaType.MULTIPART_FORM_DATA)
     @Produces (MediaType.APPLICATION_JSON)
     public Response archive(
-            @FormDataParam("project") FormDataBodyPart json,
+            @FormDataParam("project") String json,
             @FormDataParam("file") InputStream file,
             @FormDataParam("file") FormDataContentDisposition fileInfo) {
         // call the ARCHIVE process to do the work
-        return doArchive(json.getValue(), file, fileInfo);
+        return doArchive(json, file, fileInfo);
     }
     
     /**
@@ -381,17 +409,17 @@ public class ArchiveResource {
      * Should be used as a RESET BUTTON for this Project.  Will do nothing if
      * no files exist to delete.
      * 
-     * @param codeId the CODE ID to wipe files for
+     * @param projectId the PROJECT ID to wipe out
      * @throws IOException on file IO errors
      */
-    private static void wipeFiles(Long codeId) throws IOException {
+    private static void wipeFiles(Long projectId) throws IOException {
         // only do this if FILES EXIST
-        if ( !Files.exists(Paths.get(FILE_BASEDIR, String.valueOf(codeId))) )
+        if ( !Files.exists(Paths.get(FILE_BASEDIR, String.valueOf(projectId))) )
                 return;
         
         // starting at the FILE_BASEDIR + codeId, wipe out the cached files and
         // any folders
-        Files.walkFileTree(Paths.get(FILE_BASEDIR, String.valueOf(codeId)), 
+        Files.walkFileTree(Paths.get(FILE_BASEDIR, String.valueOf(projectId)), 
                 new SimpleFileVisitor<java.nio.file.Path>() {
             @Override
             public FileVisitResult visitFile(java.nio.file.Path file, BasicFileAttributes attrs)

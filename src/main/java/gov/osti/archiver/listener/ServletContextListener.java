@@ -3,6 +3,7 @@
 package gov.osti.archiver.listener;
 
 import gov.osti.archiver.Archiver;
+import gov.osti.archiver.RepositorySync;
 import gov.osti.archiver.entity.Project;
 import java.io.IOException;
 import java.io.InputStream;
@@ -76,6 +77,14 @@ public class ServletContextListener implements javax.servlet.ServletContextListe
         }
         
         threadPool.submit(new Archiver(project));        
+    }
+    
+    public static void callSync(Project project) {
+        if (null==threadPool) {
+            threadPool = Executors.newFixedThreadPool(5);
+        }
+        
+        threadPool.submit(new RepositorySync(project));
     }
 
     /**

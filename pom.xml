@@ -65,13 +65,6 @@
             <version>9.4.1212</version>
         </dependency>
 
-<!-- https://mvnrepository.com/artifact/org.apache.derby/derbyclient -->
-        <dependency>
-            <groupId>org.apache.derby</groupId>
-            <artifactId>derbyclient</artifactId>
-            <version>10.11.1.1</version>
-        </dependency>
-
         <!-- JAX/RS web services -->
         <dependency>
                   <groupId>javax.ws.rs</groupId>
