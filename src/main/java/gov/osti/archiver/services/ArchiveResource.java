@@ -9,6 +9,7 @@ import gov.osti.archiver.entity.ArchiveRequest;
 import gov.osti.archiver.entity.Project;
 import gov.osti.archiver.listener.ServletContextListener;
 import gov.osti.archiver.util.Extractor;
+import gov.osti.archiver.Maintainer;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.FileVisitResult;
@@ -314,29 +315,33 @@ public class ArchiveResource {
         }
     }
     
+    /**
+     * Process the maintenance of remote repositories as a background task.
+     * 
+     * @param command the command to issue; currently only "start" will begin
+     * activation.  Any other command will simply return the current status.
+     * 
+     * @return a Response JSON containing the current status of the background
+     * maintenance thread.
+     */
     @GET
     @Produces (MediaType.APPLICATION_JSON)
-    @Path ("/update/{projectId}")
-    public Response update(@PathParam("projectId") Long projectId) {
-        EntityManager em = ServletContextListener.createEntityManager();
+    @Path ("/maintenance/{command}")
+    public Response maintain(@PathParam("command") String command) {
+        Maintainer maintainer = Maintainer.getInstance();
         
-        try {
-            Project p = em.find(Project.class, projectId);
-            
-            if (null==p) {
-                return ErrorResponse
-                        .notFound("Project not on file.")
-                        .build();
-            }
-            ServletContextListener.callSync(p);
-            
-            return Response
-                    .ok()
-                    .entity(mapper.createObjectNode().put("project", projectId).put("status", "OK").toString())
-                    .build();
-        } finally {
-            em.close();
-        }
+        if ("start".equalsIgnoreCase(command))
+            maintainer.start();
+        
+        return Response
+                .ok()
+                .entity(mapper
+                        .createObjectNode()
+                        .put("active", maintainer.isActive())
+                        .put("total", maintainer.getProjectCount())
+                        .put("processed", maintainer.getFinishedCount())
+                        .toString())
+                .build();
     }
     
     /**
