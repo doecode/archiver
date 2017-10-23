@@ -123,6 +123,8 @@ public class Maintainer {
      */
     public void start() {
         if (!isActive()) {
+            // reset the counter
+            this.finishedCount = 0l;
             // acquire the List of Projects to maintain
             EntityManager em = ServletContextListener.createEntityManager();
             try {
