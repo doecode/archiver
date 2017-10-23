@@ -167,6 +167,23 @@ public class Project implements Serializable {
     public void setCacheFolder(String cacheFolder) {
         this.cacheFolder = cacheFolder;
     }
+
+    /**
+     * Obtain the Date this Project was last maintained/updated if remote.  Only
+     * applies to non-File repositories.
+     * @return the dateLastMaintained the DATE this project was last maintained
+     */
+    public Date getDateLastMaintained() {
+        return dateLastMaintained;
+    }
+
+    /**
+     * Set the DATE LAST MAINTAINED value
+     * @param dateLastMaintained the dateLastMaintained to set
+     */
+    public void setDateLastMaintained(Date dateLastMaintained) {
+        this.dateLastMaintained = dateLastMaintained;
+    }
     
     /**
      * Differing status values of the Project.
@@ -294,6 +311,9 @@ public class Project implements Serializable {
     @Column(name = "date_record_updated", insertable = true, updatable = true)
     @Temporal(TemporalType.TIMESTAMP)
     private Date dateRecordUpdated;
+    @JsonFormat (shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd", timezone = "EST")
+    @Temporal (TemporalType.TIMESTAMP)
+    private Date dateLastMaintained;
     @ElementCollection
     @CollectionTable (name = "archive_project_xref",
             joinColumns = @JoinColumn (name = "project_id"))
