@@ -186,6 +186,41 @@ public class Project implements Serializable {
     }
     
     /**
+     * Set the DATE LAST MAINTAINED to now.
+     */
+    public void setDateLastMaintained() {
+        this.setDateLastMaintained(new Date());
+    }
+
+    /**
+     * @return the maintenanceStatus
+     */
+    public Status getMaintenanceStatus() {
+        return maintenanceStatus;
+    }
+
+    /**
+     * @param maintenanceStatus the maintenanceStatus to set
+     */
+    public void setMaintenanceStatus(Status maintenanceStatus) {
+        this.maintenanceStatus = maintenanceStatus;
+    }
+
+    /**
+     * @return the maintenanceMessage
+     */
+    public String getMaintenanceMessage() {
+        return maintenanceMessage;
+    }
+
+    /**
+     * @param maintenanceMessage the maintenanceMessage to set
+     */
+    public void setMaintenanceMessage(String maintenanceMessage) {
+        this.maintenanceMessage = maintenanceMessage;
+    }
+    
+    /**
      * Differing status values of the Project.
      */
     public enum Status {
@@ -311,9 +346,15 @@ public class Project implements Serializable {
     @Column(name = "date_record_updated", insertable = true, updatable = true)
     @Temporal(TemporalType.TIMESTAMP)
     private Date dateRecordUpdated;
+    @Column (name = "date_last_maintained", insertable = true, updatable = true)
     @JsonFormat (shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd", timezone = "EST")
     @Temporal (TemporalType.TIMESTAMP)
     private Date dateLastMaintained;
+    @Column (length = 50, name = "maintenance_status")
+    @Enumerated (EnumType.STRING)
+    private Status maintenanceStatus;
+    @Column (length = 2000, name = "maintenance_message")
+    private String maintenanceMessage;
     @ElementCollection
     @CollectionTable (name = "archive_project_xref",
             joinColumns = @JoinColumn (name = "project_id"))
