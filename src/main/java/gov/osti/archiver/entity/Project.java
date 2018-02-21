@@ -60,7 +60,9 @@ import org.slf4j.LoggerFactory;
     @NamedQuery (name = "Project.findByCodeId", query = "SELECT p FROM Project p WHERE p.codeIds = :ids"),
     @NamedQuery (name = "Project.findByStatus", query = "SELECT p FROM Project p WHERE p.status = :status"),
     @NamedQuery (name = "Project.findByType", query = "SELECT p FROM Project p WHERE p.repositoryType = :type and p.status = :status"),
-    @NamedQuery (name = "Project.countByType", query = "SELECT COUNT(p) FROM Project p WHERE p.repositoryType = :type and p.status = :status")
+    @NamedQuery (name = "Project.countByType", query = "SELECT COUNT(p) FROM Project p WHERE p.repositoryType = :type and p.status = :status"),
+    @NamedQuery (name = "Project.findByNotType", query = "SELECT p FROM Project p WHERE p.repositoryType != :type and p.status = :status"),
+    @NamedQuery (name = "Project.countByNotType", query = "SELECT COUNT(p) FROM Project p WHERE p.repositoryType != :type and p.status = :status")
 })
 public class Project implements Serializable {
     // logger
@@ -334,7 +336,7 @@ public class Project implements Serializable {
     private String statusMessage;
     @Column (length = 20, name = "repository_type")
     @Enumerated (EnumType.STRING)
-    private RepositoryType repositoryType = RepositoryType.Git;
+    private RepositoryType repositoryType;
     // administrative dates
     @JsonFormat (shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd", timezone = "EST")
     @Basic(optional = false)

@@ -128,15 +128,15 @@ public class Maintainer {
             // acquire the List of Projects to maintain
             EntityManager em = ServletContextListener.createEntityManager();
             try {
-                // get the count of active completed projects to process
+                // get the count of active completed projects to process (NOT FILE)
                 setProjectCount(
-                        em.createNamedQuery("Project.countByType", Long.class)
-                        .setParameter("type", Project.RepositoryType.Git)
+                        em.createNamedQuery("Project.countByNotType", Long.class)
+                        .setParameter("type", Project.RepositoryType.File)
                         .setParameter("status", Project.Status.Complete).getSingleResult());
                 
-                // query up the project set to process
-                TypedQuery<Project> projectQuery = em.createNamedQuery("Project.findByType", Project.class)
-                        .setParameter("type", Project.RepositoryType.Git)
+                // query up the project set to process (NOT FILE)
+                TypedQuery<Project> projectQuery = em.createNamedQuery("Project.findByNotType", Project.class)
+                        .setParameter("type", Project.RepositoryType.File)
                         .setParameter("status", Project.Status.Complete);
                 List<Project> projects = projectQuery.getResultList();
                 

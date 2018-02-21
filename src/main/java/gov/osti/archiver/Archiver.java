@@ -5,6 +5,8 @@ package gov.osti.archiver;
 import gov.osti.archiver.entity.Project;
 import gov.osti.archiver.listener.ServletContextListener;
 import gov.osti.archiver.util.Extractor;
+import gov.osti.archiver.util.GitRepository;
+import gov.osti.archiver.util.SubversionRepository;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,8 +14,6 @@ import java.nio.file.Paths;
 import java.util.UUID;
 import javax.persistence.EntityManager;
 import org.apache.commons.compress.archivers.ArchiveException;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,29 +95,30 @@ public class Archiver extends Thread {
                     return;
                 }
             } else if (!StringUtils.isEmptyOrNull(project.getRepositoryLink())) {
-                // try to Git it
+                // set up a CACHE FOLDER and CREATE if necessary
                 try {
-                    Path pathName = Paths
-                            .get(FILE_BASEDIR, String.valueOf(project.getProjectId()), UUID.randomUUID().toString());
-                    p.setCacheFolder(pathName.toString());
-                    Git git = Git
-                            .cloneRepository()
-                            .setURI(project.getRepositoryLink())
-                            .setDirectory(Files.
-                                    createDirectories(pathName).toFile())
-                            .setCloneAllBranches(true)
-                            .call();
+                    Path path = Paths
+                            .get(FILE_BASEDIR,
+                                    String.valueOf(project.getProjectId()),
+                                    UUID.randomUUID().toString());
+                    Files.createDirectories(path);
+                    
+                    p.setCacheFolder(path.toString());
+                    
+                    // attempt to DETECT the REPOSITORY TYPE
+                    if (GitRepository.detect(project.getRepositoryLink())) {
+                        p.setRepositoryType(Project.RepositoryType.Git);
+                        GitRepository.clone(project.getRepositoryLink(), path);
+                    } else if (SubversionRepository.detect(project.getRepositoryLink())) {
+                        p.setRepositoryType(Project.RepositoryType.Subversion);
+                        SubversionRepository.clone(project.getRepositoryLink(), path);
+                    } else {
+                        throw new IOException ("Unable to determine REPOSITORY TYPE");
+                    }
                 } catch ( IOException e ) {
-                    log.warn("Git IO Error: " + e.getMessage());
+                    log.warn("IO Error checking out " + project.getRepositoryLink() + ": " + e.getMessage());
                     p.setStatus(Project.Status.Error);
                     p.setStatusMessage("Checkout IO Error");
-                    em.persist(p);
-                    em.getTransaction().commit();
-                    return;
-                } catch ( GitAPIException e ) {
-                    log.warn("Git API Error: " + e.getMessage());
-                    p.setStatus(Project.Status.Error);
-                    p.setStatusMessage("Git retrieve failed: " + e.getMessage());
                     em.persist(p);
                     em.getTransaction().commit();
                     return;

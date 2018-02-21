@@ -4,7 +4,7 @@
 
     <groupId>gov.osti</groupId>
     <artifactId>archiver</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.3</version>
     <packaging>war</packaging>
 
     <name>archiver</name>
@@ -13,6 +13,7 @@
         <endorsed.dir>${project.build.directory}/endorsed</endorsed.dir>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jersey.version>2.22.2</jersey.version>
+        <environment>development</environment>
     </properties>
     
     <dependencies>
@@ -115,6 +116,12 @@
             <version>1.14</version>
             <type>jar</type>
         </dependency>
+        <dependency>
+            <groupId>org.tmatesoft.svnkit</groupId>
+            <artifactId>svnkit</artifactId>
+            <version>1.9.0</version>
+            <type>jar</type>
+        </dependency>
     </dependencies>
 
     <build>
@@ -138,6 +145,26 @@
         </testResources>
 
         <plugins>
+        <!-- include common properties by environment -->
+        <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>properties-maven-plugin</artifactId>
+                <version>1.0.0</version>
+                <executions>
+                  <execution>
+                    <phase>initialize</phase>
+                    <goals>
+                      <goal>read-project-properties</goal>
+                    </goals>
+                    <configuration>
+                      <files>
+                        <file>${user.home}/shared-resources/doecode/${environment}.properties</file>
+                      </files>
+                    </configuration>
+                  </execution>
+                </executions>
+            </plugin>
+
  <!-- The Jetty plugin allows us to easily test the development build by
             running jetty:run on the command line. -->
             <plugin>

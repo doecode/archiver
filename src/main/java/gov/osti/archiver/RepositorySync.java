@@ -4,15 +4,10 @@ package gov.osti.archiver;
 
 import gov.osti.archiver.entity.Project;
 import gov.osti.archiver.listener.ServletContextListener;
-import java.io.File;
+import gov.osti.archiver.util.GitRepository;
+import gov.osti.archiver.util.SubversionRepository;
 import java.io.IOException;
 import javax.persistence.EntityManager;
-import javax.servlet.Servlet;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.PullResult;
-import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,37 +47,51 @@ public class RepositorySync extends Thread {
                 }
                 // check the Project
                 if (Project.Status.Complete.equals(project.getStatus())) {
-                    if (Project.RepositoryType.Git.equals(project.getRepositoryType())) {
+                    // for NON-FILE type PROJECTS, do a maintenance pass
+                    if (!Project.RepositoryType.File.equals(project.getRepositoryType())) {
+                        // start a maintenance transaction
                         em.getTransaction().begin();
                         
                         p.setMaintenanceStatus(Project.Status.Processing);
                         p.setDateLastMaintained();
                         
-                        // do a fetch/pull on this
-                        try {
-                            FileRepositoryBuilder builder = new FileRepositoryBuilder();
-                            Repository repo = builder
-                                    .setWorkTree(new File(project.getCacheFolder()))
-                                    .findGitDir()
-                                    .setMustExist(true)
-                                    .build();
-                            Git gud = new Git(repo);
-                            PullResult result = gud.pull()
-                                    .setRemote("origin")
-                                    .call();
-                            // update the Project information
-                            p.setMaintenanceStatus(Project.Status.Complete);
-                            p.setMaintenanceMessage(result.toString());
-                        } catch ( GitAPIException e ) {
-                            log.warn("Error Fetching #" + project.getProjectId(), e);
-                            p.setMaintenanceStatus(Project.Status.Error);
-                            p.setMaintenanceMessage(e.getMessage());
-                        } catch ( IOException e ) {
-                            log.warn("IO Error on #" + project.getProjectId(), e);
-                            p.setMaintenanceStatus(Project.Status.Error);
-                            p.setMaintenanceMessage(e.getMessage());
+                        switch ( p.getRepositoryType() ) {
+                            case Git:
+                                // do a fetch/pull on this
+                                try {
+                                    // attempt a Pull
+                                    String result = GitRepository.pull(project);
+
+                                    // if we get here, assume success
+                                    p.setMaintenanceStatus(Project.Status.Complete);
+                                    p.setMaintenanceMessage(result);
+                                } catch ( IOException e ) {
+                                    log.warn("IO Error on #" + project.getProjectId(), e);
+                                    p.setMaintenanceStatus(Project.Status.Error);
+                                    p.setMaintenanceMessage(e.getMessage());
+                                }
+                                break;
+                                
+                            case Subversion:
+                                try {
+                                    String result = SubversionRepository.pull(project);
+                                    
+                                    // assume success
+                                    p.setMaintenanceStatus(Project.Status.Complete);
+                                    p.setMaintenanceMessage(result);
+                                } catch ( IOException e ) {
+                                    log.warn("SVN IO Error for #" + project.getProjectId(), e);
+                                    p.setMaintenanceStatus(Project.Status.Error);
+                                    p.setMaintenanceMessage(e.getMessage());
+                                }
+                                break;
+                                
+                            default:
+                                p.setMaintenanceStatus(Project.Status.Error);
+                                p.setMaintenanceMessage("Unknown Repository Type: " + p.getRepositoryType().name());
+                                break;
                         }
-                        // store to the database
+                        // commit the result
                         em.getTransaction().commit();
                     }
                 } else {
