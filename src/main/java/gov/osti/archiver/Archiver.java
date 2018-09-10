@@ -71,60 +71,70 @@ public class Archiver extends Thread {
             
             // start a data transaction
             em.getTransaction().begin();
-            
-            /**
-             * File uploads are to be extracted to a temporary folder, a git 
-             * repository created from the contents.
-             * 
-             * Handled in the Extractor.  What comes back should be the base file
-             * path for the newly-created git repository from the archive contents.
-             * 
-             * If this has some sort of IO error, record that fact and abort.
-             */
-            if (StringUtils.isEmptyOrNull(project.getRepositoryLink()) && 
-                !StringUtils.isEmptyOrNull(project.getFileName())) {
-                try {
-                    p.setRepositoryType(Project.RepositoryType.File);
-                    p.setCacheFolder(Extractor.uncompressArchive(project));
-                } catch ( IOException | ArchiveException e ) {
-                    log.warn("Archive extraction error: "+ e.getMessage());
-                    p.setStatus(Project.Status.Error);
-                    p.setStatusMessage("Archive Error: " + e.getMessage());
-                    em.persist(p);
-                    em.getTransaction().commit();
-                    return;
-                }
-            } else if (!StringUtils.isEmptyOrNull(project.getRepositoryLink())) {
-                // set up a CACHE FOLDER and CREATE if necessary
-                try {
-                    Path path = Paths
-                            .get(FILE_BASEDIR,
-                                    String.valueOf(project.getProjectId()),
-                                    UUID.randomUUID().toString());
-                    Files.createDirectories(path);
-                    
-                    p.setCacheFolder(path.toString());
-                    
-                    // attempt to DETECT the REPOSITORY TYPE
-                    if (GitRepository.detect(project.getRepositoryLink())) {
-                        p.setRepositoryType(Project.RepositoryType.Git);
-                        GitRepository.clone(project.getRepositoryLink(), path);
-                    } else if (SubversionRepository.detect(project.getRepositoryLink())) {
-                        p.setRepositoryType(Project.RepositoryType.Subversion);
-                        SubversionRepository.clone(project.getRepositoryLink(), path);
-                    } else {
-                        throw new IOException ("Unable to determine REPOSITORY TYPE");
+
+            // if project is a Container, set cache folder, nothing else to do
+            if (Project.RepositoryType.Container.equals(project.getRepositoryType())) {
+                Path path = Paths
+                        .get(FILE_BASEDIR,
+                                String.valueOf(project.getProjectId()));
+
+                p.setCacheFolder(path.toString());
+            }
+            else {
+                /**
+                 * File uploads are to be extracted to a temporary folder, a git
+                 * repository created from the contents.
+                 *
+                 * Handled in the Extractor.  What comes back should be the base file
+                 * path for the newly-created git repository from the archive contents.
+                 *
+                 * If this has some sort of IO error, record that fact and abort.
+                 */
+                if (StringUtils.isEmptyOrNull(project.getRepositoryLink()) &&
+                    !StringUtils.isEmptyOrNull(project.getFileName())) {
+                    try {
+                        p.setRepositoryType(Project.RepositoryType.File);
+                        p.setCacheFolder(Extractor.uncompressArchive(project));
+                    } catch ( IOException | ArchiveException e ) {
+                        log.warn("Archive extraction error: "+ e.getMessage());
+                        p.setStatus(Project.Status.Error);
+                        p.setStatusMessage("Archive Error: " + e.getMessage());
+                        em.persist(p);
+                        em.getTransaction().commit();
+                        return;
                     }
-                } catch ( IOException e ) {
-                    log.warn("IO Error checking out " + project.getRepositoryLink() + ": " + e.getMessage());
-                    p.setStatus(Project.Status.Error);
-                    p.setStatusMessage("Checkout IO Error");
-                    em.persist(p);
-                    em.getTransaction().commit();
-                    return;
+                } else if (!StringUtils.isEmptyOrNull(project.getRepositoryLink())) {
+                    // set up a CACHE FOLDER and CREATE if necessary
+                    try {
+                        Path path = Paths
+                                .get(FILE_BASEDIR,
+                                        String.valueOf(project.getProjectId()),
+                                        UUID.randomUUID().toString());
+                        Files.createDirectories(path);
+
+                        p.setCacheFolder(path.toString());
+
+                        // attempt to DETECT the REPOSITORY TYPE
+                        if (GitRepository.detect(project.getRepositoryLink())) {
+                            p.setRepositoryType(Project.RepositoryType.Git);
+                            GitRepository.clone(project.getRepositoryLink(), path);
+                        } else if (SubversionRepository.detect(project.getRepositoryLink())) {
+                            p.setRepositoryType(Project.RepositoryType.Subversion);
+                            SubversionRepository.clone(project.getRepositoryLink(), path);
+                        } else {
+                            throw new IOException ("Unable to determine REPOSITORY TYPE");
+                        }
+                    } catch ( IOException e ) {
+                        log.warn("IO Error checking out " + project.getRepositoryLink() + ": " + e.getMessage());
+                        p.setStatus(Project.Status.Error);
+                        p.setStatusMessage("Checkout IO Error");
+                        em.persist(p);
+                        em.getTransaction().commit();
+                        return;
+                    }
+                } else {
+                    log.warn("Archiver Request with no action specified: " + project.getProjectId());
                 }
-            } else {
-                log.warn("Archiver Request with no action specified: " + project.getProjectId());
             }
             
             // post the changes

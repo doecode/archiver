@@ -254,7 +254,8 @@ public class Project implements Serializable {
     public enum RepositoryType {
         Git,
         Subversion,
-        File
+        File,
+        Container
     }
     
     public void setStatusMessage(String msg) {

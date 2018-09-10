@@ -204,12 +204,14 @@ public class ArchiveResource {
      * 500 - unable to read the JSON
      * 
      * @param json the JSON of the PROJECT to archive
-     * @param file (optional) a file, assumed to be a compressed archive, containing
-     * the source code of the project
+     * @param file (optional) a file, assumed to be a compressed archive, containing the source code of the project
      * @param fileInfo (optional) if present, the filename disposition of the file
+     * @param container (optional) a file, assumed to be a container image for the project
+     * @param containerInfo (optional) if present, the filename disposition of the container
      * @return 
      */
-    private Response doArchive(String json, InputStream file, FormDataContentDisposition fileInfo) {
+    private Response doArchive(String json, InputStream file, FormDataContentDisposition fileInfo
+            , InputStream container, FormDataContentDisposition containerInfo) {
         EntityManager em = ServletContextListener.createEntityManager();
         
         try {
@@ -220,14 +222,21 @@ public class ArchiveResource {
                 return ErrorResponse
                         .badRequest("Missing required Code ID value.")
                         .build();
-            
+
             //  construct a new PROJECT
+            Project projectContainer = null;
             Project project = new Project();
             project.setRepositoryLink(ar.getRepositoryLink());
             project.addCodeId(ar.getCodeId());
-            
+
+            if (StringUtils.isEmptyOrNull(ar.getRepositoryLink()) && null==file && null==container) {
+                return ErrorResponse
+                        .badRequest("Missing required parameters.")
+                        .build();
+            }
+
             em.getTransaction().begin();
-            
+
             // do we have a REPOSITORY LINK?
             if (!StringUtils.isEmptyOrNull(ar.getRepositoryLink())) {
                 // FORCE protocol if not present
@@ -282,16 +291,37 @@ public class ArchiveResource {
                             .internalServerError("File upload operation failed.")
                             .build();
                 }
-            } else {
-                return ErrorResponse
-                        .badRequest("Missing required parameters.")
-                        .build();
             }
+
+            // handle containers
+            if (null!=container) {
+                // we have a CONTAINER to do; create a PROJECT and store it
+                projectContainer = new Project();
+                projectContainer.addCodeId(ar.getCodeId());
+
+                em.persist(projectContainer); // get us a PROJECT ID
+
+                // attempt to store the archive file
+                try {
+                    String containerName = saveFile(container, projectContainer.getProjectId(), containerInfo.getFileName());
+                    projectContainer.setFileName(containerName);
+                    // set type here, becauses Containers are never maintained
+                    projectContainer.setRepositoryType(Project.RepositoryType.Container);
+                } catch ( IOException e ) {
+                    log.error ("Container Image Upload Failed: " + e.getMessage());
+                    return ErrorResponse
+                            .internalServerError("Container upload operation failed.")
+                            .build();
+                }
+            }
+
             // got this far, we must be ready to call the background thread
             em.getTransaction().commit();
 
             // fire off the background thread
             ServletContextListener.callArchiver(project);
+            if (projectContainer != null)
+                ServletContextListener.callArchiver(projectContainer);
 
             // return 201 with JSON
             return Response
@@ -355,6 +385,8 @@ public class ArchiveResource {
      * @param json the JSON of the Project to access
      * @param file (for multi-part upload requests) archive file containing
      * @param fileInfo (multi-part uploads) file disposition information
+     * @param container the uploaded container image to archive
+     * @param containerInfo disposition information for the container image name
      * source project
      * @return 
      */
@@ -364,9 +396,11 @@ public class ArchiveResource {
     public Response archive(
             @FormDataParam("project") String json,
             @FormDataParam("file") InputStream file,
-            @FormDataParam("file") FormDataContentDisposition fileInfo) {
+            @FormDataParam("file") FormDataContentDisposition fileInfo,
+            @FormDataParam("container") InputStream container,
+            @FormDataParam("container") FormDataContentDisposition containerInfo) {
         // call the ARCHIVE process to do the work
-        return doArchive(json, file, fileInfo);
+        return doArchive(json, file, fileInfo, container, containerInfo);
     }
     
     /**
@@ -386,7 +420,7 @@ public class ArchiveResource {
     @Consumes (MediaType.APPLICATION_JSON)
     @Produces (MediaType.APPLICATION_JSON)
     public Response archive(String json) {
-        return doArchive(json, null, null);
+        return doArchive(json, null, null, null, null);
     }
     
     /**
