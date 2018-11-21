@@ -64,8 +64,8 @@ public class ExtractorTest {
      */
     @Test
     public void testIdentifyArchive() throws Exception {
-        String[] files = { "test.zip", "test.tgz", "test.tar.gz", "test.jar", "test.war", "test.tar" };
-        
+        String[] files = { "test.zip", "test.tgz", "test.tar.gz", "test.jar", "test.war", "test.tar", "test.tar.bz2" };
+
         // we expect all these to pass
         for ( String file : files ) {
             assertNotNull ("Cannot identify file: " + file, Extractor.detectArchiveFormat(getTestFileFor(file)));
@@ -73,7 +73,7 @@ public class ExtractorTest {
         try {
             // we expect this one to fail
             assertNull  ("Identified base text file?", Extractor.detectArchiveFormat(getTestFileFor("text_file.txt")));
-            
+
             fail ("Text file passed extraction detection.");
         } catch ( ArchiveException e ) {
             // this was expected

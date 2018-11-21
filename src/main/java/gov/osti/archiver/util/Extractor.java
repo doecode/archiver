@@ -15,6 +15,7 @@ import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveException;
 import org.apache.commons.compress.archivers.ArchiveInputStream;
 import org.apache.commons.compress.archivers.ArchiveStreamFactory;
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,24 +42,32 @@ public class Extractor {
      */
     public static ArchiveInputStream openArchiveStream(String file_name) throws ArchiveException, IOException {
         ArchiveInputStream in;
-        
+
         if (null==file_name)
             return null;
-        
+
         if (file_name.toLowerCase().endsWith(".gz") || file_name.toLowerCase().endsWith(".tgz")) {
             in = new ArchiveStreamFactory()
                     .createArchiveInputStream(
                             new BufferedInputStream(
                                     new GzipCompressorInputStream(
                                             new FileInputStream(file_name))));
-        } else {
+        }
+        else if (file_name.toLowerCase().endsWith(".bz2")) {
+            in = new ArchiveStreamFactory()
+                    .createArchiveInputStream(
+                            new BufferedInputStream(
+                                    new BZip2CompressorInputStream(
+                                            new FileInputStream(file_name))));
+        }
+        else {
             in = new ArchiveStreamFactory()
                     .createArchiveInputStream(
                             new BufferedInputStream(new FileInputStream(file_name)));
         }
         return in;
     }
-    
+
     /**
      * Attempt to figure out what the file is based on its file name.
      * 
@@ -70,18 +79,30 @@ public class Extractor {
      * @throws IOException on file IO errors
      */
     public static String detectArchiveFormat(String file_name) throws ArchiveException, IOException {
-        return (null==file_name) ? 
-                null :
-                (file_name.toLowerCase().endsWith("gz")) ?
-                ArchiveStreamFactory.detect(
+        String format = null;
+
+        if (null!=file_name) {
+            if (file_name.toLowerCase().endsWith("gz")) {
+                format = ArchiveStreamFactory.detect(
                         new BufferedInputStream(
                                 new GzipCompressorInputStream(
-                                        Files.newInputStream(Paths.get(file_name))))) :
-                ArchiveStreamFactory.detect(
+                                        Files.newInputStream(Paths.get(file_name)))));
+            }
+            else if (file_name.toLowerCase().endsWith("bz2")) {
+                format = ArchiveStreamFactory.detect(
+                        new BufferedInputStream(
+                                new BZip2CompressorInputStream(
+                                        Files.newInputStream(Paths.get(file_name)))));
+            }
+            else
+                format = ArchiveStreamFactory.detect(
                         new BufferedInputStream(
                                 Files.newInputStream(Paths.get(file_name))));
+        }
+
+        return format;
     }
-    
+
     /**
      * Given a Project with a FileName attached, attempt to uncompress the
      * archive file into a sub-folder.
