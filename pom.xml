@@ -4,7 +4,7 @@
 
     <groupId>gov.osti</groupId>
     <artifactId>archiver</artifactId>
-    <version>1.4.0</version>
+    <version>1.4.1</version>
     <packaging>war</packaging>
 
     <name>archiver</name>
