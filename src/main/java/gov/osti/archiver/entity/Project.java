@@ -61,8 +61,8 @@ import org.slf4j.LoggerFactory;
     @NamedQuery (name = "Project.findByStatus", query = "SELECT p FROM Project p WHERE p.status = :status"),
     @NamedQuery (name = "Project.findByType", query = "SELECT p FROM Project p WHERE p.repositoryType = :type and p.status = :status"),
     @NamedQuery (name = "Project.countByType", query = "SELECT COUNT(p) FROM Project p WHERE p.repositoryType = :type and p.status = :status"),
-    @NamedQuery (name = "Project.findByNotType", query = "SELECT p FROM Project p WHERE p.repositoryType != :type and p.status = :status"),
-    @NamedQuery (name = "Project.countByNotType", query = "SELECT COUNT(p) FROM Project p WHERE p.repositoryType != :type and p.status = :status")
+    @NamedQuery (name = "Project.findByNotTypes", query = "SELECT p FROM Project p WHERE p.repositoryType NOT IN :types and p.status = :status"),
+    @NamedQuery (name = "Project.countByNotTypes", query = "SELECT COUNT(p) FROM Project p WHERE p.repositoryType NOT IN :types and p.status = :status")
 })
 public class Project implements Serializable {
     // logger

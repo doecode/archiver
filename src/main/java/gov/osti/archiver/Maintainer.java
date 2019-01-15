@@ -128,18 +128,22 @@ public class Maintainer {
             // acquire the List of Projects to maintain
             EntityManager em = ServletContextListener.createEntityManager();
             try {
-                // get the count of active completed projects to process (NOT FILE)
+                List<Project.RepositoryType> repositoryTypes = new ArrayList<>();
+                repositoryTypes.add(Project.RepositoryType.File);
+                repositoryTypes.add(Project.RepositoryType.Container);
+
+                // get the count of active completed projects to process (NOT FILE or CONTAINER)
                 setProjectCount(
-                        em.createNamedQuery("Project.countByNotType", Long.class)
-                        .setParameter("type", Project.RepositoryType.File)
+                        em.createNamedQuery("Project.countByNotTypes", Long.class)
+                        .setParameter("types", repositoryTypes)
                         .setParameter("status", Project.Status.Complete).getSingleResult());
-                
-                // query up the project set to process (NOT FILE)
-                TypedQuery<Project> projectQuery = em.createNamedQuery("Project.findByNotType", Project.class)
-                        .setParameter("type", Project.RepositoryType.File)
+
+                // query up the project set to process (NOT FILE or CONTAINER)
+                TypedQuery<Project> projectQuery = em.createNamedQuery("Project.findByNotTypes", Project.class)
+                        .setParameter("types", repositoryTypes)
                         .setParameter("status", Project.Status.Complete);
                 List<Project> projects = projectQuery.getResultList();
-                
+
                 // add each to the thread pool
                 projects.stream().forEach(project->{
                     tasks.add(threadPool.submit(new RepositorySync(project, this)));
