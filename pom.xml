@@ -15,7 +15,7 @@
         <jersey.version>2.25</jersey.version>
         <environment>development</environment>
     </properties>
-    
+
     <dependencies>
         <dependency>
             <groupId>junit</groupId>
@@ -54,9 +54,9 @@
 
         <!-- slf4j-to-log4j logging -->
         <dependency>
-                  <groupId>org.slf4j</groupId>
-                  <artifactId>slf4j-log4j12</artifactId>
-                  <version>1.7.26</version>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>1.7.26</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.eclipse.jgit/org.eclipse.jgit -->
         <dependency>
@@ -73,10 +73,10 @@
 
         <!-- JAX/RS web services -->
         <dependency>
-                  <groupId>javax.ws.rs</groupId>
-                  <artifactId>javax.ws.rs-api</artifactId>
-                  <version>2.1.1</version>
-                  <type>jar</type>
+            <groupId>javax.ws.rs</groupId>
+            <artifactId>javax.ws.rs-api</artifactId>
+            <version>2.1.1</version>
+            <type>jar</type>
         </dependency>
 
         <!-- Jersey JAX/RS implementation -->
@@ -132,21 +132,21 @@
     <build>
         <finalName>${project.name}</finalName>
         <resources>
-                <resource>
-                    <directory>src/main/resources</directory>
-                    <filtering>true</filtering>
-                </resource>
-                <resource>
-                    <directory>src/main/webapp</directory>
-                    <filtering>true</filtering>
-                    <targetPath>../filtered-resources</targetPath>
-                </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+            <resource>
+                <directory>src/main/webapp</directory>
+                <filtering>true</filtering>
+                <targetPath>../filtered-resources</targetPath>
+            </resource>
         </resources>
         <testResources>
-           <testResource>
-             <directory>src/test/resources</directory>
-             <filtering>true</filtering>
-           </testResource>
+            <testResource>
+                <directory>src/test/resources</directory>
+                <filtering>true</filtering>
+            </testResource>
         </testResources>
 
         <plugins>
@@ -186,21 +186,21 @@
                 <artifactId>properties-maven-plugin</artifactId>
                 <version>1.0.0</version>
                 <executions>
-                  <execution>
-                    <phase>initialize</phase>
-                    <goals>
-                      <goal>read-project-properties</goal>
-                    </goals>
-                    <configuration>
-                      <files>
-                        <file>${user.home}/shared-resources/doecode/${environment}.properties</file>
-                      </files>
-                    </configuration>
-                  </execution>
+                    <execution>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>read-project-properties</goal>
+                        </goals>
+                        <configuration>
+                            <files>
+                                <file>${user.home}/shared-resources/doecode/${environment}.properties</file>
+                            </files>
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
 
- <!-- The Jetty plugin allows us to easily test the development build by
+            <!-- The Jetty plugin allows us to easily test the development build by
             running jetty:run on the command line. -->
             <plugin>
                 <groupId>org.eclipse.jetty</groupId>
@@ -209,25 +209,25 @@
                 <configuration>
                     <scanIntervalSeconds>10</scanIntervalSeconds>
                     <webApp>
-                      <contextPath>/archiver</contextPath>
-                      <baseResource 
-       implementation="org.eclipse.jetty.util.resource.ResourceCollection">
-                        <resourcesAsCSV>target/filtered-resources</resourcesAsCSV>
-                      </baseResource>
+                        <contextPath>/archiver</contextPath>
+                        <baseResource
+                            implementation="org.eclipse.jetty.util.resource.ResourceCollection">
+                            <resourcesAsCSV>target/filtered-resources</resourcesAsCSV>
+                        </baseResource>
                     </webApp>
-                  </configuration>
+                </configuration>
             </plugin>
             <plugin>
-                 <groupId>org.apache.tomcat.maven</groupId>
-                 <artifactId>tomcat7-maven-plugin</artifactId>
-                 <version>2.2</version>
-                 <configuration>
-                     <url>http://${host}:${port}/manager/text</url>
-                     <server>${server}</server>
-                     <path>/${projectName}</path>
-                     <warFile>${project.build.directory}/${project.name}.war</warFile>
-                     <path>/${project.name}</path>
-                 </configuration>
+                <groupId>org.apache.tomcat.maven</groupId>
+                <artifactId>tomcat7-maven-plugin</artifactId>
+                <version>2.2</version>
+                <configuration>
+                    <url>http://${host}:${port}/manager/text</url>
+                    <server>${server}</server>
+                    <path>/${projectName}</path>
+                    <warFile>${project.build.directory}/${project.name}.war</warFile>
+                    <path>/${project.name}</path>
+                </configuration>
             </plugin>
 
             <plugin>
