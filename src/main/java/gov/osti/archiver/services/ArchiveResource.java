@@ -456,7 +456,7 @@ public class ArchiveResource {
         if ( !Files.exists(Paths.get(FILE_BASEDIR, String.valueOf(projectId))) )
                 return;
         
-        // starting at the FILE_BASEDIR + codeId, wipe out the cached files and
+        // starting at the FILE_BASEDIR + projectId, wipe out the cached files and
         // any folders
         Files.walkFileTree(Paths.get(FILE_BASEDIR, String.valueOf(projectId)), 
                 new SimpleFileVisitor<java.nio.file.Path>() {
