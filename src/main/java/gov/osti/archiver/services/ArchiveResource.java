@@ -3,13 +3,19 @@
 package gov.osti.archiver.services;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import gov.osti.archiver.entity.ArchiveRequest;
 import gov.osti.archiver.entity.Project;
 import gov.osti.archiver.listener.ServletContextListener;
 import gov.osti.archiver.util.Extractor;
 import gov.osti.archiver.Maintainer;
+
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.FileVisitResult;
@@ -20,6 +26,8 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TimeZone;
+
 import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import javax.persistence.PersistenceException;
@@ -39,6 +47,9 @@ import org.glassfish.jersey.media.multipart.FormDataParam;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.commons.mail.EmailException;
+import org.apache.commons.mail.HtmlEmail;
+
 /**
  * Archiver web services. 
  * 
@@ -54,10 +65,23 @@ public class ArchiveResource {
     // base filesystem path to save information into
     private static String FILE_BASEDIR = ServletContextListener.getConfigurationProperty("file.archive");
 
+    // get the SITE URL base for applications
+    private static String SITE_URL = ServletContextListener.getConfigurationProperty("site.url");
+
+    // EMAIL info
+    private static final String EMAIL_HOST = ServletContextListener.getConfigurationProperty("email.host");
+    private static final String EMAIL_FROM = ServletContextListener.getConfigurationProperty("email.from");
+
+    // get File Approval info
+    private static String FA_EMAIL = ServletContextListener.getConfigurationProperty("file.approval.email");
+    
+    private static final JsonNodeFactory FACTORY_INSTANCE = JsonNodeFactory.instance;
+
     // XML/JSON mapper reference
     private static final ObjectMapper mapper = new ObjectMapper()
             .setPropertyNamingStrategy(PropertyNamingStrategy.SNAKE_CASE)
-            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+            .setTimeZone(TimeZone.getDefault());
     
     /**
      * Creates a new instance of ArchiveResource
@@ -211,9 +235,11 @@ public class ArchiveResource {
      * @return 
      */
     private Response doArchive(String json, InputStream file, FormDataContentDisposition fileInfo
-            , InputStream container, FormDataContentDisposition containerInfo) {
+            , InputStream container, FormDataContentDisposition containerInfo, String sendFileNotificationText) {
         EntityManager em = ServletContextListener.createEntityManager();
         
+        boolean sendNotice = Boolean.parseBoolean(sendFileNotificationText);
+
         try {
             ArchiveRequest ar = mapper.readValue(json, ArchiveRequest.class);
             
@@ -318,6 +344,9 @@ public class ArchiveResource {
             // got this far, we must be ready to call the background thread
             em.getTransaction().commit();
 
+            if (sendNotice && null!=file)
+                sendFileUploadNotification(project);
+
             // fire off the background thread
             ServletContextListener.callArchiver(project);
             if (projectContainer != null)
@@ -342,6 +371,80 @@ public class ArchiveResource {
             if (em.getTransaction().isActive())
                 em.getTransaction().rollback();
             em.close();
+        }
+    }
+
+    /**
+     * Send a File Upload approval email notification on ANNOUNCEMENT of DOE CODE records with a file.
+     *
+     * @param p the METADATA to send notification for
+     */
+    private static void sendFileUploadNotification(Project p) {
+        // if HOST or MD or PROJECT MANAGER NAME isn't set, cannot send
+        if (StringUtils.isEmptyOrNull(EMAIL_HOST) ||
+            StringUtils.isEmptyOrNull(EMAIL_FROM) ||
+            null == p ||
+            StringUtils.isEmptyOrNull(FA_EMAIL))
+            return;
+
+        // get latest CodeId for Project
+        Long codeId = (long) -1;
+        for (Long c : p.getCodeIds()) {
+            if (c > codeId)
+                codeId = c;
+        }
+
+        // get the FILE information
+        ObjectNode info = new ObjectNode(FACTORY_INSTANCE);
+
+        String fileName = p.getFileName();
+        java.nio.file.Path latestFile = Paths.get(FILE_BASEDIR, String.valueOf(p.getProjectId()), fileName.substring(fileName.lastIndexOf(File.separator) + 1));
+
+        info.put("project_id", p.getProjectId());
+        info.set("code_ids", mapper.valueToTree(p.getCodeIds()));
+        info.put("file_path", latestFile.toString());
+
+        String fileInfo;
+        try {
+            fileInfo = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(info);
+        } catch (JsonProcessingException e1) {
+            fileInfo = "Archiver Error:  Unable to retreive File Info!";
+		}
+
+        // send email
+        try {
+            HtmlEmail email = new HtmlEmail();
+            email.setCharset(org.apache.commons.mail.EmailConstants.UTF_8);
+            email.setHostName(EMAIL_HOST);
+
+            email.setFrom(EMAIL_FROM);
+            email.setSubject("File Upload Notification -- CODE ID: " + codeId);
+
+            email.addTo(FA_EMAIL);
+
+            StringBuilder msg = new StringBuilder();
+
+            msg.append("<html>");
+            msg.append("File Upload Approval Required:");
+
+            String approvalLink = SITE_URL + "/approve?code_id=" + codeId;
+
+            msg.append("<p>A new uploaded file needs Approval for CODE ID: <a href=\"")
+                .append(approvalLink)
+                .append("\">")
+                .append(codeId)
+                .append("</a></p>");
+
+            msg.append("<pre>"+fileInfo+"</pre>");
+ 
+            msg.append("</html>");
+
+            email.setHtmlMsg(msg.toString());
+
+            email.send();
+        } catch ( EmailException e ) {
+            log.error("Unable to send File Upload notification to " + FA_EMAIL + " for #" + codeId);
+            log.error("Message: " + e.getMessage());
         }
     }
     
@@ -387,6 +490,7 @@ public class ArchiveResource {
      * @param fileInfo (multi-part uploads) file disposition information
      * @param container the uploaded container image to archive
      * @param containerInfo disposition information for the container image name
+     * @param sendFileNotification flag to determine if file upload notification should be sent
      * source project
      * @return 
      */
@@ -398,9 +502,10 @@ public class ArchiveResource {
             @FormDataParam("file") InputStream file,
             @FormDataParam("file") FormDataContentDisposition fileInfo,
             @FormDataParam("container") InputStream container,
-            @FormDataParam("container") FormDataContentDisposition containerInfo) {
+            @FormDataParam("container") FormDataContentDisposition containerInfo,
+            @FormDataParam("sendFileNotification") String sendFileNotification) {
         // call the ARCHIVE process to do the work
-        return doArchive(json, file, fileInfo, container, containerInfo);
+        return doArchive(json, file, fileInfo, container, containerInfo, sendFileNotification);
     }
     
     /**
@@ -420,7 +525,7 @@ public class ArchiveResource {
     @Consumes (MediaType.APPLICATION_JSON)
     @Produces (MediaType.APPLICATION_JSON)
     public Response archive(String json) {
-        return doArchive(json, null, null, null, null);
+        return doArchive(json, null, null, null, null, "false");
     }
     
     /**

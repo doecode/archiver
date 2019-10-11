@@ -38,4 +38,8 @@ specific profile in your own build environment.
 | Property Name | Purpose |
 | --- | --- |
 | ${file.archive} | Filesystem location (on archiver server) to store cached files and temporary repositories. |
+| ${site.url} | (optional) Base URL of the client front-end services. |
+| ${email.host} | (optional) SMTP host name for sending notification emails. |
+| ${email.from} | (optional) The address to use for sending above emails. |
+| ${file.approval.email} | (optional) Email address for sending File Approval emails.  Requires email.host and email.from properties. |
 
