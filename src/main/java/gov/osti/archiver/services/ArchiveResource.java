@@ -7,7 +7,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import gov.osti.archiver.entity.ArchiveRequest;
@@ -80,8 +79,6 @@ public class ArchiveResource {
     // get File Approval info
     private static String FA_EMAIL = ServletContextListener.getConfigurationProperty("file.approval.email");
     
-    private static final JsonNodeFactory FACTORY_INSTANCE = JsonNodeFactory.instance;
-
     // XML/JSON mapper reference
     private static final ObjectMapper mapper = new ObjectMapper()
             .setPropertyNamingStrategy(PropertyNamingStrategy.SNAKE_CASE)
@@ -605,7 +602,7 @@ public class ArchiveResource {
         }
 
         // get the FILE information
-        ObjectNode info = new ObjectNode(FACTORY_INSTANCE);
+        ObjectNode info = mapper.createObjectNode();
 
         String fileName = p.getFileName();
         java.nio.file.Path latestFile = Paths.get(FILE_BASEDIR, String.valueOf(p.getProjectId()), fileName.substring(fileName.lastIndexOf(File.separator) + 1));
