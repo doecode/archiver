@@ -4,6 +4,7 @@ package gov.osti.archiver.services;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -14,6 +15,7 @@ import gov.osti.archiver.entity.Project;
 import gov.osti.archiver.listener.ServletContextListener;
 import gov.osti.archiver.util.Extractor;
 import gov.osti.archiver.Maintainer;
+import gov.osti.archiver.LaborCalculator;
 
 import java.io.File;
 import java.io.IOException;
@@ -23,6 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -31,8 +34,10 @@ import java.util.TimeZone;
 import javax.persistence.EntityManager;
 import javax.persistence.NoResultException;
 import javax.persistence.PersistenceException;
+import javax.persistence.RollbackException;
 import javax.persistence.TypedQuery;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -163,6 +168,211 @@ public class ArchiveResource {
             log.warn("JSON parser error", e);
             return ErrorResponse
                     .internalServerError("JSON mapping error")
+                    .build();
+        } finally {
+            em.close();
+        }
+    }
+    
+    /**
+     * Query for most recent PROJECT mapping to the indicated CODE ID from DOECODE.
+     * 
+     * Returns:
+     * 200 - JSON containing latest project
+     * 404 - No project found mapping to the indiciated CODE ID
+     * 500 - JSON or database processing error
+     * 
+     * @param codeId the CODE ID value to search for
+     * @return a Response containing the information
+     */
+    @GET
+    @Path ("/latest/{codeId}")
+    @Produces (MediaType.APPLICATION_JSON)
+    public Response findLatestByCodeId(@PathParam ("codeId") Long codeId, @QueryParam("fileName") String fileName, @QueryParam("repositoryLink") String repositoryLink) {
+        EntityManager em = ServletContextListener.createEntityManager();
+        
+        try {
+            // create a Set containing the CODE ID
+            Set<Long> ids = new HashSet<>();
+            ids.add(codeId);
+            
+            Project p = null;
+
+            List<Project.RepositoryType> repositoryTypes = new ArrayList<>();
+            repositoryTypes.add(Project.RepositoryType.Container);
+
+            boolean hasTarget = !(fileName == null && repositoryLink == null);
+            String querySuffix = hasTarget ? "ForTarget" : "";
+            String errorMessage = "Code ID contains no archived Project" + (hasTarget ? " for expected target" : "") + ".";
+
+            String targetFile = StringUtils.isEmptyOrNull(fileName) ? "" : File.separator + fileName;
+            String targetRepo = StringUtils.isEmptyOrNull(repositoryLink) ? "" : repositoryLink;
+
+            // if no target is expected, just grab the latest, otherwise search for target
+            TypedQuery<Project> query = em.createNamedQuery("Project.findLatestByCodeId" + querySuffix, Project.class)
+                    .setParameter("ids", ids)
+                    .setParameter("types", repositoryTypes);
+
+            if (hasTarget)
+                query.setParameter("file", targetFile)
+                    .setParameter("repo", targetRepo);
+            
+            List<Project> results = query.setMaxResults(1).getResultList();
+
+            // if no records match, return a Not Found response; otherwise, JSON
+            if (0==results.size())
+                return ErrorResponse
+                .notFound(errorMessage)
+                .build();
+
+            // get latest project
+            p = results.get(0);
+
+            // get the FILE information
+            ObjectNode info = mapper.createObjectNode();
+
+            info.put("project_id", p.getProjectId());
+            info.put("status", p.getStatus().toString());
+            info.set("code_ids", mapper.valueToTree(p.getCodeIds()));
+            info.put("repository_type", p.getRepositoryType().toString());
+            info.put("repository_link", p.getRepositoryLink());
+            info.put("file_path", p.getFileName());
+            info.put("cache", p.getCacheFolder());
+            
+            JsonNode cloc = null;
+            try {
+                cloc = mapper.readTree(p.getLaborCloc());
+            } catch (Exception e){
+                cloc = null;
+            }
+            info.set("cloc", cloc);
+            info.put("sloc", p.getLaborSloc());
+            info.put("effort", p.getLaborEffort());
+            info.put("labor_hours", p.getLaborHours());
+            
+            return Response
+            .ok()
+            .entity(mapper.writeValueAsString(info))
+            .build();
+
+        } catch ( IOException e ) {
+            log.warn("JSON parser error", e);
+            return ErrorResponse
+                    .internalServerError("JSON mapping error")
+                    .build();
+        } finally {
+            em.close();
+        }
+    }
+    
+    /**
+     * Calculate Labor Hours for the latest PROJECT mapping to the indicated CODE ID from DOECODE.
+     * 
+     * Returns:
+     * 200 - JSON containing referenced project
+     * 404 - No project found mapping to the indiciated CODE ID
+     * 500 - JSON or database processing error
+     * 
+     * @param codeId the CODE ID value to search for
+     * @return a Response containing the information
+     */
+    @GET
+    @Path ("/calculatelabor/{codeId}")
+    @Produces (MediaType.APPLICATION_JSON)
+    public Response calculateLaborByCodeId(@PathParam ("codeId") Long codeId, @QueryParam("fileName") String fileName, @QueryParam("repositoryLink") String repositoryLink) {
+        EntityManager em = ServletContextListener.createEntityManager();
+        
+        try {
+            // create a Set containing the CODE ID
+            Set<Long> ids = new HashSet<>();
+            ids.add(codeId);
+            
+            Project p = null;
+
+            List<Project.RepositoryType> repositoryTypes = new ArrayList<>();
+            repositoryTypes.add(Project.RepositoryType.Container);
+
+            boolean hasTarget = !(fileName == null && repositoryLink == null);
+            String querySuffix = hasTarget ? "ForTarget" : "";
+            String errorMessage = "Code ID contains no archived Project" + (hasTarget ? " for expected target" : "") + ".";
+
+            String targetFile = StringUtils.isEmptyOrNull(fileName) ? "" : File.separator + fileName;
+            String targetRepo = StringUtils.isEmptyOrNull(repositoryLink) ? "" : repositoryLink;
+
+            // if no target is expected, just grab the latest, otherwise search for target
+            TypedQuery<Project> query = em.createNamedQuery("Project.findLatestByCodeId" + querySuffix, Project.class)
+                    .setParameter("ids", ids)
+                    .setParameter("types", repositoryTypes);
+
+            if (hasTarget)
+                query.setParameter("file", targetFile)
+                    .setParameter("repo", targetRepo);
+            
+            List<Project> results = query.setMaxResults(1).getResultList();
+
+            // if no records match, return a Not Found response; otherwise, JSON
+            if (0==results.size())
+                return ErrorResponse
+                .notFound(errorMessage)
+                .build();
+
+            // get latest project
+            p = results.get(0);
+
+            // if status is not Complete, return a Not Found response
+            if (!Project.Status.Complete.equals(p.getStatus()))
+                return ErrorResponse
+                .notFound("Unable to calculate Labor Hours for Project that is not Complete!")
+                .build();
+
+            // if cache is not provided, return a Not Found response
+            if (StringUtils.isEmptyOrNull(p.getCacheFolder()))
+                return ErrorResponse
+                .notFound("Unable to calculate Labor Hours if Cache Folder is not provided!")
+                .build();
+
+            // get the FILE information
+            ObjectNode info = mapper.createObjectNode();
+
+            info.put("project_id", p.getProjectId());
+            info.set("code_ids", mapper.valueToTree(p.getCodeIds()));
+            info.put("repository_type", p.getRepositoryType().toString());
+            info.put("repository_link", p.getRepositoryLink());
+            info.put("file_path", p.getFileName());
+            info.put("cache", p.getCacheFolder());
+
+            // calculate Labor Hours information, and save
+            em.getTransaction().begin();
+            p.calculateLaborHours();
+            em.getTransaction().commit();
+ 
+            // return info about the Labor Hour calculations
+            JsonNode cloc;
+            try {
+                cloc = mapper.readTree(p.getLaborCloc());
+            } catch (Exception e){
+                cloc = null;
+            }
+            info.set("cloc", cloc);
+            info.put("sloc", p.getLaborSloc());
+            info.put("effort", p.getLaborEffort());
+            info.put("labor_hours", p.getLaborHours());
+            
+                        
+            return Response
+            .ok()
+            .entity(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(info))
+            .build();
+
+        } catch ( IOException e ) {
+            log.warn("JSON parser error", e);
+            return ErrorResponse
+                    .internalServerError("JSON mapping error")
+                    .build();
+        } catch ( RollbackException | IllegalStateException e ) {
+            log.warn("Labor STORAGE error", e);
+            return ErrorResponse
+                    .internalServerError("Labor STORAGE error")
                     .build();
         } finally {
             em.close();
@@ -473,6 +683,35 @@ public class ArchiveResource {
                         .put("active", maintainer.isActive())
                         .put("total", maintainer.getProjectCount())
                         .put("processed", maintainer.getFinishedCount())
+                        .toString())
+                .build();
+    }
+    
+    /**
+     * Process the labor hours of remote repositories as a background task.
+     * 
+     * @param command the command to issue; currently only "start" will begin
+     * activation.  Any other command will simply return the current status.
+     * 
+     * @return a Response JSON containing the current status of the background
+     * labor hours thread.
+     */
+    @GET
+    @Produces (MediaType.APPLICATION_JSON)
+    @Path ("/laborhours/{command}")
+    public Response calculateLabor(@PathParam("command") String command) {
+        LaborCalculator laborCalculator = LaborCalculator.getInstance();
+        
+        if ("start".equalsIgnoreCase(command))
+            laborCalculator.start();
+        
+        return Response
+                .ok()
+                .entity(mapper
+                        .createObjectNode()
+                        .put("active", laborCalculator.isActive())
+                        .put("total", laborCalculator.getProjectCount())
+                        .put("processed", laborCalculator.getFinishedCount())
                         .toString())
                 .build();
     }

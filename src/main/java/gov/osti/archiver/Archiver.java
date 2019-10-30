@@ -143,6 +143,9 @@ public class Archiver extends Thread {
             em.persist(p);
             
             em.getTransaction().commit();
+
+            // kick off labor hour calculation for file/repo in a new thread
+            ServletContextListener.callLaborCalculation(p);
         } finally {
             // dispose of the EntityManager
             em.close();
