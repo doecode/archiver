@@ -49,10 +49,14 @@ public class RepositorySync extends Thread {
                 if (Project.Status.Complete.equals(project.getStatus())) {
                     // for NON-FILE/NON-CONTAINER type PROJECTS, do a maintenance pass
                     if (!Project.RepositoryType.File.equals(project.getRepositoryType()) && !Project.RepositoryType.Container.equals(project.getRepositoryType())) {
+                        // update status, to show we are processing.
+                        em.getTransaction().begin();
+                        p.setMaintenanceStatus(Project.Status.Processing);
+                        em.getTransaction().commit();
+
                         // start a maintenance transaction
                         em.getTransaction().begin();
                         
-                        p.setMaintenanceStatus(Project.Status.Processing);
                         p.setDateLastMaintained();
                         
                         switch ( p.getRepositoryType() ) {
