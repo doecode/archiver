@@ -442,11 +442,9 @@ public class ArchiveResource {
      * @return 
      */
     private Response doArchive(String json, InputStream file, FormDataContentDisposition fileInfo
-            , InputStream container, FormDataContentDisposition containerInfo, String sendFileNotificationText) {
+            , InputStream container, FormDataContentDisposition containerInfo) {
         EntityManager em = ServletContextListener.createEntityManager();
         
-        boolean sendNotice = Boolean.parseBoolean(sendFileNotificationText);
-
         try {
             ArchiveRequest ar = mapper.readValue(json, ArchiveRequest.class);
             
@@ -551,7 +549,7 @@ public class ArchiveResource {
             // got this far, we must be ready to call the background thread
             em.getTransaction().commit();
 
-            if (sendNotice && null!=file)
+            if (null!=file)
                 sendFileUploadNotification(project);
 
             // fire off the background thread
@@ -738,10 +736,9 @@ public class ArchiveResource {
             @FormDataParam("file") InputStream file,
             @FormDataParam("file") FormDataContentDisposition fileInfo,
             @FormDataParam("container") InputStream container,
-            @FormDataParam("container") FormDataContentDisposition containerInfo,
-            @FormDataParam("sendFileNotification") String sendFileNotification) {
+            @FormDataParam("container") FormDataContentDisposition containerInfo) {
         // call the ARCHIVE process to do the work
-        return doArchive(json, file, fileInfo, container, containerInfo, sendFileNotification);
+        return doArchive(json, file, fileInfo, container, containerInfo);
     }
     
     /**
@@ -761,7 +758,7 @@ public class ArchiveResource {
     @Consumes (MediaType.APPLICATION_JSON)
     @Produces (MediaType.APPLICATION_JSON)
     public Response archive(String json) {
-        return doArchive(json, null, null, null, null, "false");
+        return doArchive(json, null, null, null, null);
     }
     
     /**
