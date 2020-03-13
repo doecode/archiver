@@ -116,8 +116,11 @@ public class Archiver extends Thread {
 
                         // attempt to DETECT the REPOSITORY TYPE
                         if (GitRepository.detect(project.getRepositoryLink())) {
+                            // for GIT repos, append ".git" as a suffix
+                            p.setRepositoryLink(project.getRepositoryLink().replaceFirst("(?:\\/|[.]git)?$", ".git"));
+
                             p.setRepositoryType(Project.RepositoryType.Git);
-                            GitRepository.clone(project.getRepositoryLink(), path);
+                            GitRepository.clone(p.getRepositoryLink(), path);
                         } else if (SubversionRepository.detect(project.getRepositoryLink())) {
                             p.setRepositoryType(Project.RepositoryType.Subversion);
                             SubversionRepository.clone(project.getRepositoryLink(), path);

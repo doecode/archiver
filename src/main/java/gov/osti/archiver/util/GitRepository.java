@@ -31,6 +31,9 @@ public class GitRepository {
      * @return true if GIT, false if not
      */
     public static boolean detect(String url) {
+        // for GIT repos, append ".git" as a suffix
+        url = url.replaceFirst("(?:\\/|[.]git)?$", ".git");
+
         try {
             Collection<Ref> references = Git
                     .lsRemoteRepository()
