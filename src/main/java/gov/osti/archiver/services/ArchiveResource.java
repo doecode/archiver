@@ -683,6 +683,34 @@ public class ArchiveResource {
     }
     
     /**
+     * Process the maintenance of a single remote repository as a background task.
+     * 
+     * @param project the project to sync.
+     * 
+     * @return a Response JSON containing the current status of the background
+     * maintenance thread.
+     */
+    @GET
+    @Produces (MediaType.APPLICATION_JSON)
+    @Path ("/maintenance/sync/{project_id}")
+    public Response sync(@PathParam("project_id") Long project) {
+        Maintainer maintainer = Maintainer.getInstance();
+        
+        // if maintainer not already active, sync
+        maintainer.sync(project);
+
+        return Response
+                .ok()
+                .entity(mapper
+                        .createObjectNode()
+                        .put("active", maintainer.isActive())
+                        .put("total", maintainer.getProjectCount())
+                        .put("processed", maintainer.getFinishedCount())
+                        .toString())
+                .build();
+    }
+    
+    /**
      * Process the labor hours of remote repositories as a background task.
      * 
      * @param command the command to issue; currently only "start" will begin

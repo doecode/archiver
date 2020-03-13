@@ -153,4 +153,26 @@ public class Maintainer {
             }
         }
     }
+    
+    /**
+     * Start maintenance of single project, if not already running.
+     */
+    public void sync(Long project) {
+        if (!isActive()) {
+            // reset the counter
+            this.finishedCount = 0l;
+            // acquire the List of Projects to maintain
+            EntityManager em = ServletContextListener.createEntityManager();
+            try {
+                // find it
+                Project p = em.find(Project.class, project);
+
+                // add each to the thread pool
+                tasks.add(threadPool.submit(new RepositorySync(p, this)));
+                setProjectCount(new Long(1));
+            } finally {
+                em.close();
+            }
+        }
+    }
 }
