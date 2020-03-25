@@ -129,14 +129,15 @@ public class Maintainer {
                 List<Project.RepositoryType> repositoryTypes = new ArrayList<>();
                 repositoryTypes.add(Project.RepositoryType.File);
                 repositoryTypes.add(Project.RepositoryType.Container);
+                repositoryTypes.add(Project.RepositoryType.TaggedRelease);
 
-                // get the count of active completed projects to process (NOT FILE or CONTAINER)
+                // get the count of active completed projects to process (NOT FILE or CONTAINER or TAG)
                 setProjectCount(
                         em.createNamedQuery("Project.countByNotTypes", Long.class)
                         .setParameter("types", repositoryTypes)
                         .setParameter("status", Project.Status.Complete).getSingleResult());
 
-                // query up the project set to process (NOT FILE or CONTAINER)
+                // query up the project set to process (NOT FILE or CONTAINER or TAGGED RELEASE)
                 TypedQuery<Project> projectQuery = em.createNamedQuery("Project.findByNotTypes", Project.class)
                         .setParameter("types", repositoryTypes)
                         .setParameter("status", Project.Status.Complete);

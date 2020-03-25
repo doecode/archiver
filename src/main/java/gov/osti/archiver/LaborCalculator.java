@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * @author sowerst
  */
 public class LaborCalculator {
-    // singleton instance (lazy instantiation)
+   // singleton instance (lazy instantiation)
     private static LaborCalculator instance = null;
     // instance variables
     private Long projectCount = 0l;
@@ -129,9 +129,11 @@ public class LaborCalculator {
                 List<Project.RepositoryType> repositoryTypesNonFiles = new ArrayList<>();
                 repositoryTypesNonFiles.add(Project.RepositoryType.File);
                 repositoryTypesNonFiles.add(Project.RepositoryType.Container);
+                repositoryTypesNonFiles.add(Project.RepositoryType.TaggedRelease);
                 
                 List<Project.RepositoryType> repositoryTypesFiles = new ArrayList<>();
                 repositoryTypesFiles.add(Project.RepositoryType.File);
+                repositoryTypesFiles.add(Project.RepositoryType.TaggedRelease);
 
                 // query up the projects set to process (FILE or REPOSITORY requiring Labor Calculation)
                 TypedQuery<Project> projectQuery = em.createNamedQuery("Project.findLaborHourReady", Project.class)

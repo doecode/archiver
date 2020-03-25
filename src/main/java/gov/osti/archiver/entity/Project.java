@@ -43,6 +43,7 @@ import javax.persistence.PreUpdate;
 import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
+import javax.persistence.Transient;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpResponse;
@@ -291,7 +292,8 @@ public class Project implements Serializable {
         Git,
         Subversion,
         File,
-        Container
+        Container,
+        TaggedRelease
     }
     
     public void setStatusMessage(String msg) {
@@ -424,6 +426,20 @@ public class Project implements Serializable {
     }
 
     /**
+     * @return the file notification flag
+     */
+    public boolean getSendFileNotification() {
+        return sendFileNotification;
+    }
+
+    /**
+     * @param sendFileNotification the boolean to set
+     */
+    public void setSendFileNotification(boolean sendFileNotification) {
+        this.sendFileNotification = sendFileNotification;
+    }
+
+    /**
      * Method called when a record is first created.  Sets dates added and
      * updated.
      */
@@ -501,6 +517,8 @@ public class Project implements Serializable {
     @JsonFormat (shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd", timezone = "EST")
     @Temporal (TemporalType.TIMESTAMP)
     private Date dateLaborCalculated;
+    @Transient
+    private boolean sendFileNotification = false;
     
     /**
      * Parses JSON in the request body of the reader into a Project object.
