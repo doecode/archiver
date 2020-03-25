@@ -23,8 +23,6 @@ import org.slf4j.LoggerFactory;
  * @author sowerst
  */
 public class LaborCalculator {
-    // Logger
-    private static Logger log = LoggerFactory.getLogger(LaborCalculator.class);
     // singleton instance (lazy instantiation)
     private static LaborCalculator instance = null;
     // instance variables

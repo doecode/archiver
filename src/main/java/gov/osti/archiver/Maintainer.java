@@ -23,8 +23,6 @@ import org.slf4j.LoggerFactory;
  * @author ensornl
  */
 public class Maintainer {
-    // Logger
-    private static Logger log = LoggerFactory.getLogger(Maintainer.class);
     // singleton instance (lazy instantiation)
     private static Maintainer instance = null;
     // instance variables
