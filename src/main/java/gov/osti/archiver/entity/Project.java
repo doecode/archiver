@@ -92,6 +92,9 @@ import gov.osti.archiver.listener.ServletContextListener;
     @NamedQuery (name = "Project.countByNotTypes", query = "SELECT COUNT(p) FROM Project p WHERE p.repositoryType NOT IN :types and p.status = :status")
 })
 public class Project implements Serializable {
+
+    private static final long serialVersionUID = -8454319680573907732L;
+
     // logger
     private static final Logger log = LoggerFactory.getLogger(Project.class);
 
