@@ -138,4 +138,14 @@ public class ServletContextListener implements javax.servlet.ServletContextListe
         
         return emf.createEntityManager();
     }
+
+    /**
+     * Refresh the caches.
+     */
+    public static void refreshCaches() {
+        if (null == emf)
+            throw new IllegalStateException("Context not initialized!");
+
+        emf.getCache().evictAll();
+    }
 }

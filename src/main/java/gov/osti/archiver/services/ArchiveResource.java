@@ -648,6 +648,25 @@ public class ArchiveResource {
                         .toString())
                 .build();
     }
+
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/refresh")
+    public Response refresh() throws Exception {
+        try {
+            ServletContextListener.refreshCaches();
+
+            return Response
+                    .ok()
+                    .entity(mapper.createObjectNode().put("refreshed", "true").toString())
+                    .build();
+        } catch (Exception e) {
+            log.warn("Refresh Error: " + e.getMessage());
+            return ErrorResponse
+                    .internalServerError("Error refreshing caches.")
+                    .build();
+        }
+    }
     
     /**
      * POST a Project to be archived.  
