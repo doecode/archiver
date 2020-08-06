@@ -34,7 +34,7 @@ public class GitRepository {
     private static final String GITHUB_BASE_URL = "https://api.github.com/repos/";
     
     /**
-     * Determine if this is a GIT repository URL.
+     * Determine if this is a GIT Repository URL.
      * 
      * @param url the URL to check
      * @return true if GIT, false if not
