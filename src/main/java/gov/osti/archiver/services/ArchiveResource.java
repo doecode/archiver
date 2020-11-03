@@ -459,12 +459,31 @@ public class ArchiveResource {
                 // FORCE protocol if not present
                 if (!ar.getRepositoryLink().startsWith("http"))
                     ar.setRepositoryLink("https://" + ar.getRepositoryLink());
+
+                // trim any slash or .git suffix before searching
+                String targetRepo = ar.getRepositoryLink().replaceFirst("(?:\\/|[.]git)?$", "");
+
                 // see if it's ALREADY been cached
                 TypedQuery<Project> query = em.createNamedQuery("Project.findByRepositoryLink", Project.class)
-                        .setParameter("url", ar.getRepositoryLink());
+                        .setParameter("url", targetRepo);
                 
                 try {
-                    Project p = query.getSingleResult();
+                    List<Project> pList = query.getResultList();
+
+                    if (pList.isEmpty()) {
+                        // prime repo missing, check for .git version
+                        targetRepo = targetRepo.replaceFirst("(?:\\/|[.]git)?$", ".git");
+
+                        query = em.createNamedQuery("Project.findByRepositoryLink", Project.class)
+                            .setParameter("url", targetRepo);
+                            
+                        pList = query.getResultList();
+                    }
+
+                    if (pList.isEmpty())
+                        throw new NoResultException();
+
+                    Project p = pList.get(0);
                     
                     // may need to add this CODE ID if multiple projects post to this
                     if ( p.addCodeId(ar.getCodeId()) ) {

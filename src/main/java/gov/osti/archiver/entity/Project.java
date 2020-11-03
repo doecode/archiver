@@ -80,7 +80,7 @@ import gov.osti.archiver.listener.ServletContextListener;
 @Table (name = "ARCHIVE_PROJECT")
 @JsonIgnoreProperties (ignoreUnknown = true)
 @NamedQueries ({
-    @NamedQuery (name = "Project.findByRepositoryLink", query = "SELECT p FROM Project p WHERE UPPER(p.repositoryLink) = UPPER(:url)"),
+    @NamedQuery (name = "Project.findByRepositoryLink", query = "SELECT p FROM Project p WHERE UPPER(p.repositoryLink) = UPPER(:url) ORDER BY p.dateRecordAdded"),
     @NamedQuery (name = "Project.findById", query = "SELECT p FROM Project p WHERE p.projectId = :id"),
     @NamedQuery (name = "Project.findByCodeId", query = "SELECT p FROM Project p WHERE p.codeIds = :ids"),
     @NamedQuery (name = "Project.findLatestByCodeId", query = "SELECT p FROM Project p WHERE p.codeIds = :ids AND p.repositoryType NOT IN :types ORDER BY p.dateRecordAdded DESC"),
