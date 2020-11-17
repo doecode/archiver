@@ -12,10 +12,10 @@ import org.slf4j.LoggerFactory;
 import org.tmatesoft.svn.core.SVNException;
 import org.tmatesoft.svn.core.SVNURL;
 import org.tmatesoft.svn.core.internal.io.fs.FSRepositoryFactory;
-import org.tmatesoft.svn.core.internal.io.svn.SVNRepositoryFactoryImpl;
 import org.tmatesoft.svn.core.io.SVNRepository;
 import org.tmatesoft.svn.core.io.SVNRepositoryFactory;
 import org.tmatesoft.svn.core.wc2.SvnCheckout;
+import org.tmatesoft.svn.core.wc2.SvnCleanup;
 import org.tmatesoft.svn.core.wc2.SvnOperationFactory;
 import org.tmatesoft.svn.core.wc2.SvnTarget;
 import org.tmatesoft.svn.core.wc2.SvnUpdate;
@@ -82,9 +82,29 @@ public class SubversionRepository {
             update.setSingleTarget(SvnTarget.fromFile(new File(project.getCacheFolder())));
             long[] ids = update.run();
             
-            return "Operation successful.";
+            return "Update successful.";
+        } catch (SVNException e) {
+            log.warn("SVN Update Error for #" + project.getProjectId() + ": " + e.getMessage());
+            throw new IOException(e.getMessage());
+        } finally {
+            factory.dispose();
+        }
+    }
+
+    public static String cleanup(Project project) throws IOException {
+        SvnOperationFactory factory = new SvnOperationFactory();
+        
+        try {
+            FSRepositoryFactory.setup();
+            
+            final SvnCleanup cleanup = factory.createCleanup();
+            cleanup.setSingleTarget(SvnTarget.fromFile(new File(project.getCacheFolder())));
+            cleanup.setBreakLocks(true);
+            cleanup.run();
+            
+            return "Cleanup successful.";
         } catch ( SVNException e ) {
-            log.warn("SVN Error for #" + project.getProjectId() + ": " + e.getMessage());
+            log.warn("SVN Cleanup Error for #" + project.getProjectId() + ": " + e.getMessage());
             throw new IOException (e.getMessage());
         } finally {
             factory.dispose();

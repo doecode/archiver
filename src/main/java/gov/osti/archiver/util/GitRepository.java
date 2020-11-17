@@ -13,9 +13,14 @@ import java.util.Collection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.eclipse.jgit.api.CheckoutCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.PullResult;
+import org.eclipse.jgit.api.CreateBranchCommand.SetupUpstreamMode;
+import org.eclipse.jgit.api.ResetCommand.ResetType;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.lib.Constants;
+import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
@@ -179,34 +184,211 @@ public class GitRepository {
     }
     
     /**
-     * Attempt to MAINTAIN/PULL the repository in git format.  If this DOES NOT
+     * Attempt to MAINTAIN/PULL the repository in git format. If this DOES NOT throw
+     * an IOException, one may assume success.
+     * 
+     * @param project the Project to maintain
+     * @return a String describing the successful process
+     * @throws IOException on API or other IO error
+     */
+    public static String pull(Project project) throws Exception {
+        // do a fetch/pull on this
+        Git gud = null;
+        try {
+            FileRepositoryBuilder builder = new FileRepositoryBuilder();
+            Repository repo = builder.setWorkTree(new File(project.getCacheFolder())).findGitDir().setMustExist(true)
+                    .build();
+            gud = new Git(repo);
+            PullResult result = gud.pull().setRemote("origin")
+                    .call();
+            // return the RESULT information
+            return result.toString();
+        } catch (GitAPIException e) {
+            log.warn("PULL API Error on #" + project.getProjectId());
+            throw new Exception(e.getMessage());
+        } catch (IOException e) {
+            log.warn("PULL IO Error on #" + project.getProjectId());
+            throw e;
+        } catch (Exception e) {
+            log.warn("PULL Error on #" + project.getProjectId());
+            throw e;
+        } finally {
+            // clean up if necessary
+            if (null != gud)
+                gud.close();
+        }
+    }
+
+    /**
+     * Attempt to MAINTAIN/RESET the repository in git format. If this DOES NOT
      * throw an IOException, one may assume success.
      * 
      * @param project the Project to maintain
      * @return a String describing the successful process
      * @throws IOException on API or other IO error
      */
-    public static String pull(Project project) throws IOException {
-        // do a fetch/pull on this
+    public static String reset(Project project) throws Exception {
+        // do a fetch/reset on this
         Git gud = null;
         try {
             FileRepositoryBuilder builder = new FileRepositoryBuilder();
-            Repository repo = builder
-                    .setWorkTree(new File(project.getCacheFolder()))
-                    .findGitDir()
-                    .setMustExist(true)
+            Repository repo = builder.setWorkTree(new File(project.getCacheFolder())).findGitDir().setMustExist(true)
                     .build();
             gud = new Git(repo);
-            PullResult result = gud.pull()
-                    .setRemote("origin")
-                    .call();
-            // return the RESULT information
+
+            // first doa  fetch
+            gud.fetch()
+            .setCheckFetchedObjects(true)
+            .setRemoveDeletedRefs(true)
+            .setForceUpdate(true)
+            .call();
+
+            // attempt to determine what the origin head commit is
+            ObjectId originHead = getOriginHead(repo);
+
+            // reset to HEAD
+            Ref result = gud.reset()
+                .setMode(ResetType.HARD)
+                .setRef(originHead.getName())
+                .call();
+
             return result.toString();
         } catch ( GitAPIException e ) {
-            log.warn("Error Fetching #" + project.getProjectId(), e);
-            throw new IOException (e.getMessage());
+            log.warn("RESET API Error on #" + project.getProjectId());
+            throw new Exception (e.getMessage());
         } catch ( IOException e ) {
-            log.warn("IO Error on #" + project.getProjectId(), e);
+            log.warn("RESET IO Error on #" + project.getProjectId());
+            throw e;
+        } catch ( Exception e ) {
+            log.warn("RESET Error on #" + project.getProjectId());
+            throw e;
+        } finally {
+            // clean up if necessary
+            if (null!=gud)
+                gud.close();
+        }
+    }
+
+    /**
+     * Attempt to MAINTAIN/CHECKOUT the repository in git format. If this DOES NOT
+     * throw an IOException, one may assume success.
+     * 
+     * @param project the Project to maintain
+     * @return a String describing the successful process
+     * @throws IOException on API or other IO error
+     */
+    public static String checkout(Project project) throws Exception {
+        // checkout the branch, with tracking
+        Git gud = null;
+        String branch = "master";
+
+        try {
+            FileRepositoryBuilder builder = new FileRepositoryBuilder();
+            Repository repo = builder.setWorkTree(new File(project.getCacheFolder())).findGitDir().setMustExist(true)
+                    .build();
+            gud = new Git(repo);
+
+            // identify remote branches, if exist
+            ObjectId masterRemote = repo.resolve("refs/remotes/origin/master");
+            ObjectId mainRemote = repo.resolve("refs/remotes/origin/main");
+
+            // if we couldn't find master/main, then we don't know how to proceed automatically
+            if (masterRemote == null && mainRemote == null)
+                throw new Exception("Unable to locate remote master/main branch!");
+
+            // if master doesn't exist, use main if it does exist
+            if (masterRemote == null)
+                branch = "main";
+
+            // checkout cmd
+            CheckoutCommand chkCmd = gud.checkout();
+
+            ObjectId branchLocal = repo.resolve("refs/heads/" + branch);
+
+            // if no local branch, we must create
+            if (branchLocal == null)
+                chkCmd = chkCmd.setCreateBranch(true);
+
+            // perform checkout
+            Ref result = chkCmd
+                .setName(branch)
+                .setUpstreamMode(SetupUpstreamMode.SET_UPSTREAM)
+                .setForceRefUpdate(true)
+                .setStartPoint("origin/" + branch)
+                .call();
+            
+            return result.toString();
+        } catch ( GitAPIException e ) {
+            log.warn("CHECKOUT API Error on #" + project.getProjectId());
+            throw new Exception (e.getMessage());
+        } catch ( IOException e ) {
+            log.warn("CHECKOUT IO Error on #" + project.getProjectId());
+            throw e;
+        } catch ( Exception e ) {
+            log.warn("CHECKOUT Error on #" + project.getProjectId());
+            throw e;
+        } finally {
+            // clean up if necessary
+            if (null!=gud)
+                gud.close();
+        }
+    }
+
+    /**
+     * Attempt to locate the HEAD from Origin for the proper branch.
+     * 
+     * @param repo the Repository to evaluate
+     * @return an ObjectId of the HEAD commit
+     * @throws IOException on API or other IO error
+     */
+    private static ObjectId getOriginHead(Repository repo) throws Exception {
+        // do a fetch/reset on this
+        Git gud = null;
+        try {
+            gud = new Git(repo);
+
+            ObjectId originHead = repo.resolve(Constants.R_REMOTES + "origin/" + Constants.HEAD);
+
+            // if no remote HEAD is found, attempt to find master/main
+            if (originHead == null) {
+                ObjectId masterRemote = repo.resolve("refs/remotes/origin/master");
+                ObjectId mainRemote = repo.resolve("refs/remotes/origin/main");
+
+                // use master if exists, else main
+                if (masterRemote != null) {
+                    originHead = masterRemote;
+                } else if (mainRemote != null) {
+                    originHead = mainRemote;
+                }
+            }
+
+            // if still no HEAD, attempt one last effort to brute force it
+            if (originHead == null) {
+                Collection<Ref> refList = gud.lsRemote().call();
+                for (Ref ref : refList) {
+                    if (ref == null)
+                        continue;
+
+                    Ref leaf = ref.getLeaf();
+                    if (leaf == null)
+                        continue;
+
+                    if (leaf.getName().equals("HEAD")) {
+                        String refId = ref.getObjectId().getName();
+                        log.warn("Brute Forced HEAD location: " + refId);
+                        originHead = ref.getObjectId();
+                        break;
+                    }
+                }
+            }
+
+            // if still no HEAD, we have no way to proceed automatically.
+            if (originHead == null)
+                throw new Exception("Unable to determine Origin Head!");
+                
+            return originHead;
+        } catch ( Exception e ) {
+            log.warn("ORIGIN HEAD Error for repo: " + repo.getFullBranch());
             throw e;
         } finally {
             // clean up if necessary

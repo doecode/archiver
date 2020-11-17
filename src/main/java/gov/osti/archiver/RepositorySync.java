@@ -63,14 +63,45 @@ public class RepositorySync extends Thread {
                             case Git:
                                 // do a fetch/pull on this
                                 try {
+                                    String result = "Unknown Sync Error.";
+                                    boolean forceReset = false;
+                                    boolean forceCheckout = false;
+
                                     // attempt a Pull
-                                    String result = GitRepository.pull(project);
+                                    try {
+                                        result = GitRepository.pull(project);
+                                    } catch ( Exception e ) {
+                                        String msg = e.getMessage();
+                                        if (msg.toUpperCase().endsWith("MERGING")) {
+                                            forceReset = true;
+                                            log.warn("PULL encountered MERGING issue on Project #" + project.getProjectId() + "! Forcing RESET!");
+                                        }
+                                        else if (msg.toUpperCase().startsWith("REMOTE ORIGIN DID NOT ADVERTISE REF")) {
+                                            forceReset = true;
+                                            forceCheckout = true;
+                                            log.warn("PULL encountered REMOTE REF issue on Project #" + project.getProjectId() + "! Forcing RESET!");
+                                        }
+                                        else
+                                            throw e;
+                                    }
+
+                                    if (forceReset)
+                                        // attempt a Reset
+                                        result = GitRepository.reset(project);
+
+                                    if (forceCheckout)
+                                        // attempt a Checkout
+                                        result = GitRepository.checkout(project);
+
+                                    if (forceReset)
+                                        // re-attempt another Pull
+                                        result = GitRepository.pull(project);
 
                                     // if we get here, assume success
                                     p.setMaintenanceStatus(Project.Status.Complete);
                                     p.setMaintenanceMessage(result);
-                                } catch ( IOException e ) {
-                                    log.warn("IO Error on #" + project.getProjectId(), e);
+                                } catch ( Exception e ) {
+                                    log.warn("Sync Error on #" + project.getProjectId(), e);
                                     p.setMaintenanceStatus(Project.Status.Error);
                                     p.setMaintenanceMessage(e.getMessage());
                                 }
@@ -78,7 +109,28 @@ public class RepositorySync extends Thread {
                                 
                             case Subversion:
                                 try {
-                                    String result = SubversionRepository.pull(project);
+                                    String result = "Unknown Sync Error.";
+                                    boolean forceCleanup = false;
+
+                                    try {
+                                        result = SubversionRepository.pull(project);
+                                    } catch ( Exception e ) {
+                                        String msg = e.getMessage();
+                                        if (msg.toUpperCase().contains("LOCKED")) {
+                                            forceCleanup = true;
+                                            log.warn("PULL encountered LOCKING issue on Project #" + project.getProjectId() + "! Forcing RESET!");
+                                        }
+                                        else
+                                            throw e;
+                                    }
+
+                                    if (forceCleanup)
+                                        // attempt a Reset
+                                        result = SubversionRepository.cleanup(project);
+
+                                    if (forceCleanup)
+                                        // re-attempt another Pull
+                                        result = SubversionRepository.pull(project);
                                     
                                     // assume success
                                     p.setMaintenanceStatus(Project.Status.Complete);
