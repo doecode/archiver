@@ -84,7 +84,7 @@ import gov.osti.archiver.listener.ServletContextListener;
     @NamedQuery (name = "Project.findById", query = "SELECT p FROM Project p WHERE p.projectId = :id"),
     @NamedQuery (name = "Project.findByCodeId", query = "SELECT p FROM Project p WHERE p.codeIds = :ids"),
     @NamedQuery (name = "Project.findLatestByCodeId", query = "SELECT p FROM Project p WHERE p.codeIds = :ids AND p.repositoryType NOT IN :types ORDER BY p.dateRecordAdded DESC"),
-    @NamedQuery (name = "Project.findLatestByCodeIdForTarget", query = "SELECT p FROM Project p WHERE p.codeIds = :ids AND p.repositoryType NOT IN :types AND (p.fileName = CONCAT(p.cacheFolder, :file) OR p.repositoryLink = :repo) ORDER BY p.dateRecordAdded DESC"),
+    @NamedQuery (name = "Project.findLatestByCodeIdForTarget", query = "SELECT p FROM Project p WHERE p.codeIds = :ids AND p.repositoryType NOT IN :types AND (p.fileName = CONCAT(p.cacheFolder, :file) OR (p.repositoryLink = :repo OR p.repositoryLink = :repoAlt)) ORDER BY p.dateRecordAdded DESC"),
     @NamedQuery (name = "Project.findLaborHourReady", query = "SELECT p FROM Project p WHERE p.status = :status and ((p.repositoryType NOT IN :typesNonFiles and p.dateLastMaintained IS NOT NULL and (p.dateLaborCalculated IS NULL or p.dateLaborCalculated < p.dateLastMaintained)) or (p.repositoryType IN :typesFiles and p.dateLaborCalculated IS NULL)) ORDER BY p.projectId"),
     @NamedQuery (name = "Project.findByStatus", query = "SELECT p FROM Project p WHERE p.status = :status"),
     @NamedQuery (name = "Project.findByType", query = "SELECT p FROM Project p WHERE p.repositoryType = :type and p.status = :status"),

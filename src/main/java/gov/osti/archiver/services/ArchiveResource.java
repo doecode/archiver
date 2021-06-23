@@ -198,7 +198,8 @@ public class ArchiveResource {
 
             if (hasTarget)
                 query.setParameter("file", targetFile)
-                    .setParameter("repo", targetRepo);
+                    .setParameter("repo", targetRepo)
+                    .setParameter("repoAlt", targetRepo + ".git");
             
             List<Project> results = query.setMaxResults(1).getResultList();
 
@@ -289,7 +290,8 @@ public class ArchiveResource {
 
             if (hasTarget)
                 query.setParameter("file", targetFile)
-                    .setParameter("repo", targetRepo);
+                    .setParameter("repo", targetRepo)
+                    .setParameter("repoAlt", targetRepo + ".git");
             
             List<Project> results = query.setMaxResults(1).getResultList();
 
