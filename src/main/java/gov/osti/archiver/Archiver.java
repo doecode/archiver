@@ -215,8 +215,10 @@ public class Archiver extends Thread {
             ServletContextListener.callLaborCalculation(p);
 
             // send notifications
-            if (project.getSendFileNotification())
+            if (project.getSendFileNotification()) {
+                p.setLastEditor(project.getLastEditor());
                 sendFileUploadNotification(p);
+            }
         } finally {
             // dispose of the EntityManager
             em.close();
@@ -260,6 +262,12 @@ public class Archiver extends Thread {
             fileInfo = "Archiver Error:  Unable to retreive File Info!";
 		}
 
+        //get editor info
+        String lastEditor = "Unknown";
+        if (!StringUtils.isEmptyOrNull(p.getLastEditor())) {
+            lastEditor = p.getLastEditor();
+        }
+
         // send email
         try {
             HtmlEmail email = new HtmlEmail();
@@ -283,6 +291,10 @@ public class Archiver extends Thread {
                 .append("\">")
                 .append(codeId)
                 .append("</a></p>");
+
+            msg.append("<p>Last edited by: ")
+                .append(lastEditor)
+                .append("</p>");
 
             msg.append("<pre>"+fileInfo+"</pre>");
  

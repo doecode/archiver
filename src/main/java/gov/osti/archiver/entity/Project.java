@@ -440,6 +440,20 @@ public class Project implements Serializable {
     }
 
     /**
+     * @return the file notification editor
+     */
+    public String getLastEditor() {
+        return lastEditor;
+    }
+
+    /**
+     * @param lastEditor the email of editor
+     */
+    public void setLastEditor(String lastEditor) {
+        this.lastEditor = lastEditor;
+    }
+
+    /**
      * Method called when a record is first created.  Sets dates added and
      * updated.
      */
@@ -519,6 +533,8 @@ public class Project implements Serializable {
     private Date dateLaborCalculated;
     @Transient
     private boolean sendFileNotification = false;
+    @Transient
+    String lastEditor = null;
     
     /**
      * Parses JSON in the request body of the reader into a Project object.

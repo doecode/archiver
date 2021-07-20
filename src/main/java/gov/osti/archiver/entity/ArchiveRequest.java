@@ -15,6 +15,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 public class ArchiveRequest {
     private Long codeId;
     private String repositoryLink;
+    private String lastEditor;
 
     /**
      * @return the codeId
@@ -42,5 +43,19 @@ public class ArchiveRequest {
      */
     public void setRepositoryLink(String repositoryLink) {
         this.repositoryLink = repositoryLink;
+    }
+
+    /**
+     * @return the lastEditor email
+     */
+    public String getLastEditor() {
+        return lastEditor;
+    }
+
+    /**
+     * @param lastEditor the lastEditor email
+     */
+    public void setLastEditor(String lastEditor) {
+        this.lastEditor = lastEditor;
     }
 }

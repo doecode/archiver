@@ -447,6 +447,7 @@ public class ArchiveResource {
             Project project = new Project();
             project.setRepositoryLink(ar.getRepositoryLink());
             project.addCodeId(ar.getCodeId());
+            project.setLastEditor(ar.getLastEditor());
 
             if (StringUtils.isEmptyOrNull(ar.getRepositoryLink()) && null==file && null==container) {
                 return ErrorResponse
