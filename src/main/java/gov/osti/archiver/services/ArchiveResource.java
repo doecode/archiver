@@ -455,6 +455,12 @@ public class ArchiveResource {
                         .build();
             }
 
+            if (!StringUtils.isEmptyOrNull(ar.getRepositoryLink()) && null!=file) {
+                return ErrorResponse
+                        .badRequest("The system only allows for a Repository URL or a File Upload, please resubmit your record with a single appropriate source location.")
+                        .build();
+            }
+
             em.getTransaction().begin();
 
             // do we have a REPOSITORY LINK?
