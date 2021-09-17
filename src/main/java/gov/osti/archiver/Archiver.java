@@ -278,7 +278,9 @@ public class Archiver extends Thread {
             email.setFrom(EMAIL_FROM);
             email.setSubject("File Upload Notification -- CODE ID: " + codeId);
 
-            email.addTo(FA_EMAIL);
+            String[] toList = FA_EMAIL.split(", ?");
+            for (String to : toList) 
+                email.addTo(to);
 
             StringBuilder msg = new StringBuilder();
 
