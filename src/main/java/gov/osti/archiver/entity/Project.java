@@ -482,6 +482,20 @@ public class Project implements Serializable {
     }
 
     /**
+     * @return the limited flag
+     */
+    public boolean getIsLimited() {
+        return isLimited;
+    }
+
+    /**
+     * @param isLimited the limited flag
+     */
+    public void setIsLimited(boolean isLimited) {
+        this.isLimited = isLimited;
+    }
+
+    /**
      * Method called when a record is first created.  Sets dates added and
      * updated.
      */
@@ -564,6 +578,8 @@ public class Project implements Serializable {
     private boolean sendFileNotification = false;
     @Transient
     String lastEditor = null;
+    @Column (name = "is_limited")
+    boolean isLimited = false;
     
     /**
      * Parses JSON in the request body of the reader into a Project object.

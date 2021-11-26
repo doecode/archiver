@@ -46,6 +46,7 @@ public class Archiver extends Thread {
     private static Logger log = LoggerFactory.getLogger(Archiver.class);
     // base filesystem path to save information into
     private static String FILE_BASEDIR = ServletContextListener.getConfigurationProperty("file.archive");
+    private static String FILE_LIMITED_BASEDIR = ServletContextListener.getConfigurationProperty("file.limited.archive");
 
     // get the SITE URL base for applications
     private static String SITE_URL = ServletContextListener.getConfigurationProperty("site.url");
@@ -110,6 +111,9 @@ public class Archiver extends Thread {
                 log.warn("Project " + project.getProjectId() + " is not on file.");
                 return;
             }
+
+            boolean isLimited = project.getIsLimited();
+            String targetBaseDir = isLimited ? FILE_LIMITED_BASEDIR : FILE_BASEDIR;
             
             // start a data transaction
             em.getTransaction().begin();
@@ -117,7 +121,7 @@ public class Archiver extends Thread {
             // if project is a Container, set cache folder, nothing else to do
             if (Project.RepositoryType.Container.equals(project.getRepositoryType())) {
                 Path path = Paths
-                        .get(FILE_BASEDIR,
+                        .get(targetBaseDir,
                                 String.valueOf(project.getProjectId()));
 
                 p.setCacheFolder(path.toString());
@@ -171,7 +175,7 @@ public class Archiver extends Thread {
                         // set up a CACHE FOLDER and CREATE if necessary
                         try {
                             Path path = Paths
-                                    .get(FILE_BASEDIR,
+                                    .get(targetBaseDir,
                                             String.valueOf(project.getProjectId()),
                                             UUID.randomUUID().toString());
                             Files.createDirectories(path);
@@ -218,6 +222,7 @@ public class Archiver extends Thread {
             // send notifications
             if (project.getSendFileNotification()) {
                 p.setLastEditor(project.getLastEditor());
+                p.setIsLimited(project.getIsLimited());
                 sendFileUploadNotification(p);
             }
         } finally {
@@ -249,8 +254,11 @@ public class Archiver extends Thread {
         // get the FILE information
         ObjectNode info = mapper.createObjectNode();
 
+        boolean isLimited = p.getIsLimited();
+        String targetBaseDir = isLimited ? FILE_LIMITED_BASEDIR : FILE_BASEDIR;
+
         String fileName = RepositoryType.TaggedRelease.equals(p.getRepositoryType()) ? String.valueOf(p.getProjectId()) + TR_ARCHIVE_EXT : p.getFileName();
-        java.nio.file.Path latestFile = Paths.get(FILE_BASEDIR, String.valueOf(p.getProjectId()), fileName.substring(fileName.lastIndexOf(File.separator) + 1));
+        java.nio.file.Path latestFile = Paths.get(targetBaseDir, String.valueOf(p.getProjectId()), fileName.substring(fileName.lastIndexOf(File.separator) + 1));
 
         info.put("project_id", p.getProjectId());
         info.set("code_ids", mapper.valueToTree(p.getCodeIds()));

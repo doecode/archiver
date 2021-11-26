@@ -64,6 +64,7 @@ public class ArchiveResource {
     private static Logger log = LoggerFactory.getLogger(ArchiveResource.class);
     // base filesystem path to save information into
     private static String FILE_BASEDIR = ServletContextListener.getConfigurationProperty("file.archive");
+    private static String FILE_LIMITED_BASEDIR = ServletContextListener.getConfigurationProperty("file.limited.archive");
     
     // XML/JSON mapper reference
     private static final ObjectMapper mapper = new ObjectMapper()
@@ -206,6 +207,7 @@ public class ArchiveResource {
             ObjectNode info = mapper.createObjectNode();
 
             info.put("project_id", p.getProjectId());
+            info.put("is_limited", p.getIsLimited());
             info.put("status", p.getStatus().toString());
             info.put("date_project_added", p.getLatestProjectDate().toString());
             info.set("code_ids", mapper.valueToTree(p.getSimpleCodeIds()));
@@ -439,6 +441,7 @@ public class ArchiveResource {
             project.setRepositoryLink(ar.getRepositoryLink());
             project.addCodeId(ar.getCodeId());
             project.setLastEditor(ar.getLastEditor());
+            project.setIsLimited(ar.getIsLimited());
 
             if (StringUtils.isEmptyOrNull(ar.getRepositoryLink()) && null==file && null==container) {
                 return ErrorResponse
@@ -512,7 +515,7 @@ public class ArchiveResource {
                 
                 // attempt to store and extract the archive file
                 try {
-                    String fileName = saveFile(file, project.getProjectId(), fileInfo.getFileName());
+                    String fileName = saveFile(file, project.getProjectId(), fileInfo.getFileName(), project.getIsLimited());
                     project.setFileName(fileName);
                     // ensure we can tell what sort of archive we have
                     if (null==Extractor.detectArchiveFormat(fileName))
@@ -535,12 +538,13 @@ public class ArchiveResource {
                 // we have a CONTAINER to do; create a PROJECT and store it
                 projectContainer = new Project();
                 projectContainer.addCodeId(ar.getCodeId());
+                projectContainer.setIsLimited(ar.getIsLimited());
 
                 em.persist(projectContainer); // get us a PROJECT ID
 
                 // attempt to store the archive file
                 try {
-                    String containerName = saveFile(container, projectContainer.getProjectId(), containerInfo.getFileName());
+                    String containerName = saveFile(container, projectContainer.getProjectId(), containerInfo.getFileName(), projectContainer.getIsLimited());
                     projectContainer.setFileName(containerName);
                     // set type here, becauses Containers are never maintained
                     projectContainer.setRepositoryType(Project.RepositoryType.Container);
@@ -745,9 +749,11 @@ public class ArchiveResource {
      * @throws IOException on IO errors
      * @return the new File name complete path
      */
-    private static String saveFile(InputStream in, Long projectId, String fileName) throws IOException {
+    private static String saveFile(InputStream in, Long projectId, String fileName, boolean isLimited) throws IOException {
+        String targetBaseDir = isLimited ? FILE_LIMITED_BASEDIR : FILE_BASEDIR;
+
         // store this file in a designated base path
-        java.nio.file.Path destination = Paths.get(FILE_BASEDIR, String.valueOf(projectId), fileName);
+        java.nio.file.Path destination = Paths.get(targetBaseDir, String.valueOf(projectId), fileName);
         // make the necessary file paths
         Files.createDirectories(destination.getParent());
         // save it
@@ -765,14 +771,16 @@ public class ArchiveResource {
      * @param projectId the PROJECT ID to wipe out
      * @throws IOException on file IO errors
      */
-    private static void wipeFiles(Long projectId) throws IOException {
+    private static void wipeFiles(Long projectId, boolean isLimited) throws IOException {
+        String targetBaseDir = isLimited ? FILE_LIMITED_BASEDIR : FILE_BASEDIR;
+        
         // only do this if FILES EXIST
-        if ( !Files.exists(Paths.get(FILE_BASEDIR, String.valueOf(projectId))) )
+        if ( !Files.exists(Paths.get(targetBaseDir, String.valueOf(projectId))) )
                 return;
         
-        // starting at the FILE_BASEDIR + projectId, wipe out the cached files and
+        // starting at the targetBaseDir + projectId, wipe out the cached files and
         // any folders
-        Files.walkFileTree(Paths.get(FILE_BASEDIR, String.valueOf(projectId)), 
+        Files.walkFileTree(Paths.get(targetBaseDir, String.valueOf(projectId)), 
                 new SimpleFileVisitor<java.nio.file.Path>() {
             @Override
             public FileVisitResult visitFile(java.nio.file.Path file, BasicFileAttributes attrs)

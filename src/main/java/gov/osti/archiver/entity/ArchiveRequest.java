@@ -16,6 +16,7 @@ public class ArchiveRequest {
     private Long codeId;
     private String repositoryLink;
     private String lastEditor;
+    private boolean isLimited;
 
     /**
      * @return the codeId
@@ -57,5 +58,19 @@ public class ArchiveRequest {
      */
     public void setLastEditor(String lastEditor) {
         this.lastEditor = lastEditor;
+    }
+
+    /**
+     * @return the limited flag
+     */
+    public boolean getIsLimited() {
+        return isLimited;
+    }
+
+    /**
+     * @param isLimited the limited flag
+     */
+    public void setIsLimited(boolean isLimited) {
+        this.isLimited = isLimited;
     }
 }

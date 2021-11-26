@@ -31,6 +31,7 @@ public class Extractor {
     private static Logger log = LoggerFactory.getLogger(Extractor.class);
     // base file folder containing archive uploads
     private static String FILE_BASEDIR = ServletContextListener.getConfigurationProperty("file.archive");
+    private static String FILE_LIMITED_BASEDIR = ServletContextListener.getConfigurationProperty("file.limited.archive");
     
     /**
      * Attempt to open an ArchiveInputStream based on the file_name specified.
@@ -120,10 +121,13 @@ public class Extractor {
     public static String uncompressArchive(Project project) throws IOException, ArchiveException {
         if (null==project.getFileName())
             return null;
+
+        boolean isLimited = project.getIsLimited();
+        String targetBaseDir = isLimited ? FILE_LIMITED_BASEDIR : FILE_BASEDIR;
         
         // uncompress the archive into the PROJECT folder
         Path base_file_path = Paths.get(
-                FILE_BASEDIR,
+                targetBaseDir,
                 String.valueOf(project.getProjectId()));
         File folder = base_file_path.toFile();
         if (!folder.exists())
