@@ -17,6 +17,7 @@ import java.io.Reader;
 import java.io.Serializable;
 import java.io.StringWriter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -82,9 +83,8 @@ import gov.osti.archiver.listener.ServletContextListener;
 @NamedQueries ({
     @NamedQuery (name = "Project.findByRepositoryLink", query = "SELECT p FROM Project p WHERE UPPER(p.repositoryLink) = UPPER(:url) ORDER BY p.dateRecordAdded"),
     @NamedQuery (name = "Project.findById", query = "SELECT p FROM Project p WHERE p.projectId = :id"),
-    @NamedQuery (name = "Project.findByCodeId", query = "SELECT p FROM Project p WHERE p.codeIds = :ids"),
-    @NamedQuery (name = "Project.findLatestByCodeId", query = "SELECT p FROM Project p WHERE p.codeIds = :ids AND p.repositoryType NOT IN :types ORDER BY p.dateRecordAdded DESC"),
-    @NamedQuery (name = "Project.findLatestByCodeIdForTarget", query = "SELECT p FROM Project p WHERE p.codeIds = :ids AND p.repositoryType NOT IN :types AND (p.fileName = CONCAT(p.cacheFolder, :file) OR (p.repositoryLink = :repo OR p.repositoryLink = :repoAlt)) ORDER BY p.dateRecordAdded DESC"),
+    @NamedQuery (name = "Project.findByCodeId", query = "SELECT p FROM Project p JOIN p.codeIds c WHERE c.codeId IN :ids"),
+    @NamedQuery (name = "Project.findLatestByCodeId", query = "SELECT p FROM Project p JOIN p.codeIds c WHERE c.codeId IN :ids AND p.repositoryType NOT IN :types ORDER BY c.dateRecordAdded DESC, p.projectId DESC"),
     @NamedQuery (name = "Project.findLaborHourReady", query = "SELECT p FROM Project p WHERE p.status = :status and ((p.repositoryType NOT IN :typesNonFiles and p.dateLastMaintained IS NOT NULL and (p.dateLaborCalculated IS NULL or p.dateLaborCalculated < p.dateLastMaintained)) or (p.repositoryType IN :typesFiles and p.dateLaborCalculated IS NULL)) ORDER BY p.projectId"),
     @NamedQuery (name = "Project.findByStatus", query = "SELECT p FROM Project p WHERE p.status = :status"),
     @NamedQuery (name = "Project.findByType", query = "SELECT p FROM Project p WHERE p.repositoryType = :type and p.status = :status"),
@@ -173,19 +173,47 @@ public class Project implements Serializable {
     /**
      * @return the codeIds
      */
-    public Set<Long> getCodeIds() {
+    public List<ProjectXref> getCodeIds() {
         return codeIds;
     }
 
     /**
      * @param codeIds the codeIds to set
      */
-    public void setCodeIds(Set<Long> codeIds) {
+    public void setCodeIds(List<ProjectXref> codeIds) {
         this.codeIds = codeIds;
     }
     
     public boolean addCodeId(Long id) {
-        return codeIds.add(id);
+        int max = codeIds.size() - 1;
+        for (int i = max; i >= 0; i--) {
+            if (codeIds.get(i).getCodeId().equals(id))
+                codeIds.remove(i);
+        }
+        return codeIds.add(new ProjectXref(id));
+    }
+
+    /**
+     * @return the simple codeIds
+     */
+    public List<Long> getSimpleCodeIds() {
+        Set<Long> ids = new HashSet<>();
+        for (ProjectXref c : codeIds) {
+            ids.add(c.getCodeId());
+        }
+        List<Long> sortedList = new ArrayList<>(ids);
+        Collections.sort(sortedList);
+        return sortedList;
+    }
+
+    /**
+     * @return the simple codeIds
+     */
+    public Date getLatestProjectDate() {
+        List<ProjectXref> sortedList = new ArrayList<>();
+        sortedList.addAll(codeIds);
+        Collections.sort(sortedList, Collections.reverseOrder());
+        return sortedList.get(0).getDateRecordAdded();
     }
 
     /**
@@ -512,7 +540,8 @@ public class Project implements Serializable {
     @ElementCollection
     @CollectionTable (name = "archive_project_xref",
             joinColumns = @JoinColumn (name = "project_id"))
-    private Set<Long> codeIds = new HashSet<>();
+    private List<ProjectXref> codeIds = new ArrayList<>();
+
     @Column(name = "cache_folder", length = 1000)
     private String cacheFolder;
     @Lob

@@ -171,7 +171,7 @@ public class ArchiveResource {
     @GET
     @Path ("/latest/{codeId}")
     @Produces (MediaType.APPLICATION_JSON)
-    public Response findLatestByCodeId(@PathParam ("codeId") Long codeId, @QueryParam("fileName") String fileName, @QueryParam("repositoryLink") String repositoryLink) {
+    public Response findLatestByCodeId(@PathParam ("codeId") Long codeId) {
         EntityManager em = ServletContextListener.createEntityManager();
         
         try {
@@ -184,22 +184,12 @@ public class ArchiveResource {
             List<Project.RepositoryType> repositoryTypes = new ArrayList<>();
             repositoryTypes.add(Project.RepositoryType.Container);
 
-            boolean hasTarget = !(fileName == null && repositoryLink == null);
-            String querySuffix = hasTarget ? "ForTarget" : "";
-            String errorMessage = "Code ID contains no archived Project" + (hasTarget ? " for expected target" : "") + ".";
+            String errorMessage = "Code ID contains no archived Project.";
 
-            String targetFile = StringUtils.isEmptyOrNull(fileName) ? "" : File.separator + fileName;
-            String targetRepo = StringUtils.isEmptyOrNull(repositoryLink) ? "" : repositoryLink;
-
-            // if no target is expected, just grab the latest, otherwise search for target
-            TypedQuery<Project> query = em.createNamedQuery("Project.findLatestByCodeId" + querySuffix, Project.class)
+            // just grab the latest
+            TypedQuery<Project> query = em.createNamedQuery("Project.findLatestByCodeId", Project.class)
                     .setParameter("ids", ids)
                     .setParameter("types", repositoryTypes);
-
-            if (hasTarget)
-                query.setParameter("file", targetFile)
-                    .setParameter("repo", targetRepo)
-                    .setParameter("repoAlt", targetRepo + ".git");
             
             List<Project> results = query.setMaxResults(1).getResultList();
 
@@ -217,7 +207,8 @@ public class ArchiveResource {
 
             info.put("project_id", p.getProjectId());
             info.put("status", p.getStatus().toString());
-            info.set("code_ids", mapper.valueToTree(p.getCodeIds()));
+            info.put("date_project_added", p.getLatestProjectDate().toString());
+            info.set("code_ids", mapper.valueToTree(p.getSimpleCodeIds()));
             info.put("repository_type", p.getRepositoryType().toString());
             info.put("repository_link", p.getRepositoryLink());
             info.put("file_path", p.getFileName());
@@ -320,7 +311,7 @@ public class ArchiveResource {
             ObjectNode info = mapper.createObjectNode();
 
             info.put("project_id", p.getProjectId());
-            info.set("code_ids", mapper.valueToTree(p.getCodeIds()));
+            info.set("code_ids", mapper.valueToTree(p.getSimpleCodeIds()));
             info.put("repository_type", p.getRepositoryType().toString());
             info.put("repository_link", p.getRepositoryLink());
             info.put("file_path", p.getFileName());

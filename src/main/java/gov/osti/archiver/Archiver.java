@@ -3,6 +3,7 @@
 package gov.osti.archiver;
 
 import gov.osti.archiver.entity.Project;
+import gov.osti.archiver.entity.ProjectXref;
 import gov.osti.archiver.entity.Project.RepositoryType;
 import gov.osti.archiver.listener.ServletContextListener;
 import gov.osti.archiver.util.Extractor;
@@ -240,9 +241,9 @@ public class Archiver extends Thread {
 
         // get latest CodeId for Project
         Long codeId = (long) -1;
-        for (Long c : p.getCodeIds()) {
-            if (c > codeId)
-                codeId = c;
+        for (ProjectXref c : p.getCodeIds()) {
+            if (c.getCodeId() > codeId)
+                codeId = c.getCodeId();
         }
 
         // get the FILE information
