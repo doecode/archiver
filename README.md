@@ -43,5 +43,6 @@ specific profile in your own build environment.
 | ${email.host} | (optional) SMTP host name for sending notification emails. |
 | ${email.from} | (optional) The address to use for sending above emails. |
 | ${file.approval.email} | (optional) Email address for sending File Approval emails.  Requires email.host and email.from properties. |
+| ${project.deletion.email} | (optional) Email address for sending Project Deletion emails.  Requires email.host and email.from properties. |
 | ${laborhours.cloc} | (optional) Full path location to the "cloc" program that calculates SLOC for labor hours. |
 | ${laborhours.cocomoii} | (optional) URL used to calculate effort based on SLOC via COCOMO II methodology. |

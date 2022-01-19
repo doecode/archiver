@@ -90,7 +90,8 @@ import gov.osti.archiver.listener.ServletContextListener;
     @NamedQuery (name = "Project.findByType", query = "SELECT p FROM Project p WHERE p.repositoryType = :type and p.status = :status"),
     @NamedQuery (name = "Project.countByType", query = "SELECT COUNT(p) FROM Project p WHERE p.repositoryType = :type and p.status = :status"),
     @NamedQuery (name = "Project.findByNotTypes", query = "SELECT p FROM Project p WHERE p.repositoryType NOT IN :types and p.status = :status"),
-    @NamedQuery (name = "Project.countByNotTypes", query = "SELECT COUNT(p) FROM Project p WHERE p.repositoryType NOT IN :types and p.status = :status")
+    @NamedQuery (name = "Project.countByNotTypes", query = "SELECT COUNT(p) FROM Project p WHERE p.repositoryType NOT IN :types and p.status = :status"),
+    @NamedQuery (name = "Project.findRemovablesByCodeId", query = "SELECT p FROM Project p JOIN p.codeIds c WHERE c.codeId IN :ids AND p NOT IN (SELECT p FROM Project p JOIN p.codeIds c WHERE c.codeId NOT IN :ids) ORDER BY p.projectId DESC"),
 })
 public class Project implements Serializable {
 
@@ -185,12 +186,16 @@ public class Project implements Serializable {
     }
     
     public boolean addCodeId(Long id) {
+        removeCodeId(id);
+        return codeIds.add(new ProjectXref(id));
+    }
+    
+    public void removeCodeId(Long id) {
         int max = codeIds.size() - 1;
         for (int i = max; i >= 0; i--) {
             if (codeIds.get(i).getCodeId().equals(id))
                 codeIds.remove(i);
         }
-        return codeIds.add(new ProjectXref(id));
     }
 
     /**

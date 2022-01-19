@@ -18,10 +18,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
 import javax.persistence.EntityManager;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -57,6 +60,9 @@ public class Archiver extends Thread {
 
     // get File Approval info
     private static String FA_EMAIL = ServletContextListener.getConfigurationProperty("file.approval.email");
+    
+    // get Project Deletion info
+    private static String PD_EMAIL = ServletContextListener.getConfigurationProperty("project.deletion.email");
     
     // XML/JSON mapper reference
     private static final ObjectMapper mapper = new ObjectMapper()
@@ -316,6 +322,96 @@ public class Archiver extends Thread {
             email.send();
         } catch ( EmailException e ) {
             log.error("Unable to send File Upload notification to " + FA_EMAIL + " for #" + codeId);
+            log.error("Message: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Send a Project Deletion email notification on DELETION of DOE CODE records.
+     *
+     * @param p the METADATA to send notification for
+     */
+    public static void sendProjectDeletionNotification(ObjectNode data) {
+        // if HOST or MD or PROJECT MANAGER NAME isn't set, cannot send
+        if (StringUtils.isEmptyOrNull(EMAIL_HOST) ||
+            StringUtils.isEmptyOrNull(EMAIL_FROM) ||
+            null == data ||
+            StringUtils.isEmptyOrNull(PD_EMAIL))
+            return;
+
+        // get info
+        Long codeId = data.get("code_id").asLong();
+        Long projectsDeleted = data.get("projects_deleted").asLong();
+        String user = data.get("deleted_by").asText();
+
+        ObjectNode minInfo = mapper.createObjectNode();
+        minInfo.put("code_id", codeId);
+        minInfo.put("projects_deleted", projectsDeleted);
+
+        List<JsonNode> completed = new ArrayList<>();
+        data.path("removed").forEach(completed::add);
+        int removedCount = completed.size();
+        String removedInfo;
+        try {
+            removedInfo = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(completed);
+        } catch (JsonProcessingException e1) {
+            removedInfo = "Archiver Delete Error:  Unable to retreive Removed Info!";
+		}
+
+        List<JsonNode> failed = new ArrayList<>();
+        data.path("failed").forEach(failed::add);
+        int failedCount = failed.size();
+        String failedInfo;
+        try {
+            failedInfo = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(failed);
+        } catch (JsonProcessingException e1) {
+            failedInfo = "Archiver Delete Error:  Unable to retreive Failed Info!";
+		}
+
+        String fileInfo;
+        try {
+            fileInfo = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(minInfo);
+        } catch (JsonProcessingException e1) {
+            fileInfo = "Archiver Delete Error:  Unable to retreive Deletion Info!";
+		}
+
+        // send email
+        try {
+            HtmlEmail email = new HtmlEmail();
+            email.setCharset(org.apache.commons.mail.EmailConstants.UTF_8);
+            email.setHostName(EMAIL_HOST);
+
+            email.setFrom(EMAIL_FROM);
+            email.setSubject("Project Deletion Notification (Archiver) -- CODE ID: " + codeId);
+
+            String[] toList = PD_EMAIL.split(", ?");
+            for (String to : toList) 
+                email.addTo(to);
+
+            StringBuilder msg = new StringBuilder();
+
+            msg.append("<html>");
+            msg.append("Project Deletion Notification:");
+
+            msg.append("<p>Deleted by: ")
+                .append(user)
+                .append("</p>");
+
+            msg.append("<pre>"+fileInfo+"</pre>");
+            
+            if (failedCount > 0)
+                msg.append("<BR><BR><span style='color:red'>Failed Removals:</span><BR><pre>"+failedInfo+"</pre>");
+            
+            if (removedCount > 0)
+                msg.append("<BR><BR>Completed Removals:<BR><pre>"+removedInfo+"</pre>");
+ 
+            msg.append("</html>");
+
+            email.setHtmlMsg(msg.toString());
+
+            email.send();
+        } catch ( EmailException e ) {
+            log.error("Unable to send Project Deletion notification to " + PD_EMAIL + " for #" + codeId);
             log.error("Message: " + e.getMessage());
         }
     }

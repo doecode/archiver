@@ -10,10 +10,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import gov.osti.archiver.entity.ArchiveRequest;
 import gov.osti.archiver.entity.Project;
+import gov.osti.archiver.entity.Project.RepositoryType;
 import gov.osti.archiver.listener.ServletContextListener;
 import gov.osti.archiver.util.Extractor;
 import gov.osti.archiver.Maintainer;
 import gov.osti.archiver.LaborCalculator;
+import gov.osti.archiver.Archiver;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,6 +41,7 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.core.MediaType;
@@ -386,6 +389,96 @@ public class ArchiveResource {
             log.warn("JSON Error", e);
             return ErrorResponse
                     .internalServerError("JSON processing error.")
+                    .build();
+        } finally {
+            em.close();
+        }
+    }
+    
+    /**
+     * DELETE orphaned PROJECT mappings from the indicated CODE ID from DOECODE.
+     * 
+     * Returns:
+     * 200 - JSON containing deleted projects
+     * 404 - No project found mapping to the indiciated CODE ID
+     * 500 - JSON or database processing error
+     * 
+     * @param codeId the CODE ID value to search for
+     * @return a Response containing the information
+     */
+    @DELETE
+    @Path ("/code_id/{codeId}")
+    @Produces (MediaType.APPLICATION_JSON)
+    public Response deleteByCodeId(@PathParam ("codeId") Long codeId, @QueryParam("user") String user) {
+        EntityManager em = ServletContextListener.createEntityManager();
+        user = user != null ? user : "Unknown";
+        
+        try {
+            // create a Set containing the CODE ID
+            Set<Long> ids = new HashSet<>();
+            ids.add(codeId);
+
+            // find removables
+            TypedQuery<Project> queryRemove = em.createNamedQuery("Project.findRemovablesByCodeId", Project.class)
+                    .setParameter("ids", ids);
+
+            // find updatables
+            TypedQuery<Project> queryUpdate = em.createNamedQuery("Project.findByCodeId", Project.class)
+                    .setParameter("ids", ids);
+            
+            List<Project> resultsRemove = queryRemove.getResultList();
+
+            // get information
+            ObjectNode info = mapper.createObjectNode();
+
+            List<ObjectNode> completed = new ArrayList<>();
+            List<ObjectNode> failed = new ArrayList<>();
+
+            em.getTransaction().begin();
+            for (Project p : resultsRemove) {
+                ObjectNode detail = mapper.createObjectNode();
+                detail.put("project_id", p.getProjectId());
+                RepositoryType repoType = p.getRepositoryType();
+                String repoTypeText = repoType != null ? repoType.toString() : null;
+                detail.put("repository_type", repoTypeText);          
+                detail.put("cache", p.getCacheFolder());
+                detail.put("is_limited", p.getIsLimited());
+
+                try {
+                    wipeFiles(p.getProjectId(), p.getIsLimited());
+                    completed.add(detail);
+                }
+                catch (Exception e) {
+                    failed.add(detail);
+                }
+                em.remove(p);
+            }
+            // remove CODE ID from any remaining            
+            List<Project> resultsUpdate = queryUpdate.getResultList();
+            for (Project p : resultsUpdate) {
+                p.removeCodeId(codeId);
+                em.merge(p);
+            } 
+            em.getTransaction().commit();
+            info.put("code_id", codeId);
+            info.put("deleted_by", user);
+            info.put("projects_deleted", resultsRemove.size());
+            if (!failed.isEmpty())
+                info.set("failed", mapper.valueToTree(failed));
+            if (!completed.isEmpty())
+                info.set("removed", mapper.valueToTree(completed));
+
+            Archiver.sendProjectDeletionNotification(info);
+            
+            return Response
+            .ok()
+            .entity(mapper.writeValueAsString(info))
+            .build();
+
+        } catch ( IOException e ) {
+            log.warn("JSON parser error", e);
+            return ErrorResponse
+                    .internalServerError("JSON mapping error")
                     .build();
         } finally {
             em.close();
