@@ -56,6 +56,7 @@ public class ServletContextListener implements javax.servlet.ServletContextListe
             try {
                 in = ServletContextListener.class.getClassLoader().getResourceAsStream(PROPERTIES_FILE);
                 if (null!=in) configuration.load(in);
+                if (in != null) try{in.close();} catch (Exception e) {}
             } catch ( IOException e ) {
                 log.warn("Context Initialization Failure: " + e.getMessage());
             }

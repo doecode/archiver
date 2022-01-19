@@ -73,14 +73,14 @@ public class GitRepository {
      * @throws IOException on IO errors
      */
     public static void clone(String url, Path path) throws IOException {
-        try {
-            Git git = Git
-                .cloneRepository()
-                .setURI(url)
-                .setDirectory(Files.
-                        createDirectories(path).toFile())
-                .setCloneAllBranches(true)
-                .call();
+        try (Git git = Git
+            .cloneRepository()
+            .setURI(url)
+            .setDirectory(Files.
+                    createDirectories(path).toFile())
+            .setCloneAllBranches(true)
+            .call()) {
+            // do nothing, just try-with-resources to close file locks
         } catch ( GitAPIException e ) {
             log.warn("Git for URL: " + url + " failed: " + e.getMessage());
             throw new IOException("Git Failure: " + e.getMessage());

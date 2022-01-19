@@ -83,22 +83,25 @@ public class Extractor {
         String format = null;
 
         if (null!=file_name) {
+            BufferedInputStream bis = null;
+
             if (file_name.toLowerCase().endsWith("gz")) {
-                format = ArchiveStreamFactory.detect(
-                        new BufferedInputStream(
+                bis = new BufferedInputStream(
                                 new GzipCompressorInputStream(
-                                        Files.newInputStream(Paths.get(file_name)))));
+                                        Files.newInputStream(Paths.get(file_name))));
             }
             else if (file_name.toLowerCase().endsWith("bz2")) {
-                format = ArchiveStreamFactory.detect(
-                        new BufferedInputStream(
+                bis = new BufferedInputStream(
                                 new BZip2CompressorInputStream(
-                                        Files.newInputStream(Paths.get(file_name)))));
+                                        Files.newInputStream(Paths.get(file_name))));
             }
             else
-                format = ArchiveStreamFactory.detect(
-                        new BufferedInputStream(
-                                Files.newInputStream(Paths.get(file_name))));
+                bis = new BufferedInputStream(
+                                Files.newInputStream(Paths.get(file_name)));
+
+            format = ArchiveStreamFactory.detect(bis);
+
+            if (bis != null) try{bis.close();} catch (Exception e) {}
         }
 
         return format;
@@ -159,6 +162,8 @@ public class Extractor {
                 Files.copy(in, base_file_path.resolve(entry.getName()));
             }
         }
+
+        if (in != null) try{in.close();} catch (Exception e) {}
         
         // send back the file path created
         return base_file_path.toString();
