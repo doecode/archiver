@@ -194,16 +194,29 @@ public class GitRepository {
     public static String pull(Project project) throws Exception {
         // do a fetch/pull on this
         Git gud = null;
+        String pathToProject = "";
         try {
             FileRepositoryBuilder builder = new FileRepositoryBuilder();
             Repository repo = builder.setWorkTree(new File(project.getCacheFolder())).findGitDir().setMustExist(true)
                     .build();
+            pathToProject = repo.getDirectory().getAbsolutePath();
             gud = new Git(repo);
             PullResult result = gud.pull().setRemote("origin")
                     .call();
             // return the RESULT information
             return result.toString();
-        } catch (GitAPIException e) {
+        } catch ( JGitInternalException e ) {
+            if(!pathToProject.isEmpty()) {
+                File indexLock = new File(pathToProject + "/index.lock");
+                if(indexLock.delete()) {
+                    log.warn("Successfully deleted index.lock file.");
+                }else{
+                    log.warn("Failed to delete index.lock file.");
+                }
+            }
+            log.warn("PULL lock file Error on #" + project.getProjectId());
+            throw new Exception (e.getMessage());
+        }  catch (GitAPIException e) {
             log.warn("PULL API Error on #" + project.getProjectId());
             throw new Exception(e.getMessage());
         } catch (IOException e) {
@@ -230,10 +243,12 @@ public class GitRepository {
     public static String reset(Project project) throws Exception {
         // do a fetch/reset on this
         Git gud = null;
+        String pathToProject = "";
         try {
             FileRepositoryBuilder builder = new FileRepositoryBuilder();
             Repository repo = builder.setWorkTree(new File(project.getCacheFolder())).findGitDir().setMustExist(true)
                     .build();
+            pathToProject = repo.getDirectory().getAbsolutePath();
             gud = new Git(repo);
 
             // first doa  fetch
@@ -253,7 +268,19 @@ public class GitRepository {
                 .call();
 
             return result.toString();
-        } catch ( GitAPIException e ) {
+        } catch ( JGitInternalException e ) {
+            //delete lock file, hopefully fixes error for future runs
+            if(!pathToProject.isEmpty()) {
+                File indexLock = new File(pathToProject + "/index.lock");
+                if(indexLock.delete()) {
+                    log.warn("Successfully deleted index.lock file.");
+                }else{
+                    log.warn("Failed to delete index.lock file.");
+                }
+            }
+            log.warn("RESET lock file Error on #" + project.getProjectId());
+            throw new Exception (e.getMessage());
+        }  catch ( GitAPIException e ) {
             log.warn("RESET API Error on #" + project.getProjectId());
             throw new Exception (e.getMessage());
         } catch ( IOException e ) {
@@ -281,11 +308,12 @@ public class GitRepository {
         // checkout the branch, with tracking
         Git gud = null;
         String branch = "master";
-
+        String pathToProject = "";
         try {
             FileRepositoryBuilder builder = new FileRepositoryBuilder();
             Repository repo = builder.setWorkTree(new File(project.getCacheFolder())).findGitDir().setMustExist(true)
                     .build();
+            pathToProject = repo.getDirectory().getAbsolutePath();
             gud = new Git(repo);
 
             // identify remote branches, if exist
@@ -318,6 +346,17 @@ public class GitRepository {
                 .call();
             
             return result.toString();
+        } catch ( JGitInternalException e ) {
+            if(!pathToProject.isEmpty()) {
+                File indexLock = new File(pathToProject + "/index.lock");
+                if(indexLock.delete()) {
+                    log.warn("Successfully deleted index.lock file.");
+                }else{
+                    log.warn("Failed to delete index.lock file.");
+                }
+            }
+            log.warn("CHECKOUT lock file Error on #" + project.getProjectId());
+            throw new Exception (e.getMessage());
         } catch ( GitAPIException e ) {
             log.warn("CHECKOUT API Error on #" + project.getProjectId());
             throw new Exception (e.getMessage());
