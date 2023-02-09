@@ -19,9 +19,11 @@ import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.CreateBranchCommand.SetupUpstreamMode;
 import org.eclipse.jgit.api.ResetCommand.ResetType;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.errors.JGitInternalException;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.SymbolicRef;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.util.StringUtils;
@@ -201,7 +203,28 @@ public class GitRepository {
                     .build();
             pathToProject = repo.getDirectory().getAbsolutePath();
             gud = new Git(repo);
-            PullResult result = gud.pull().setRemote("origin")
+            
+        
+            Ref ref = Git.lsRemoteRepository().setRemote(project.getRepositoryLink()).callAsMap().get("HEAD");
+            String branch = ref.getTarget().getName();
+
+            CheckoutCommand chkCmd = gud.checkout();
+
+            ObjectId branchLocal = repo.resolve(branch);
+
+            // if no local branch, we must create
+            if (branchLocal == null)
+                chkCmd = chkCmd.setCreateBranch(true);
+
+            // perform checkout
+            Ref res = chkCmd
+                .setName(branch)
+                .setUpstreamMode(SetupUpstreamMode.SET_UPSTREAM)
+                // .setForceRefUpdate(true) excluding prevents taking commits from branch and overlaying rather than switching. 
+                .setStartPoint("origin/" + branch.substring(branch.lastIndexOf('/') + 1))
+                .call();
+
+            PullResult result = gud.pull().setRemoteBranchName(branch)   //("origin")
                     .call();
             // return the RESULT information
             return result.toString();
@@ -251,16 +274,16 @@ public class GitRepository {
             pathToProject = repo.getDirectory().getAbsolutePath();
             gud = new Git(repo);
 
+            Ref ref = Git.lsRemoteRepository().setRemote(project.getRepositoryLink()).callAsMap().get("HEAD");
             // first doa  fetch
             gud.fetch()
-            .setCheckFetchedObjects(true)
-            .setRemoveDeletedRefs(true)
-            .setForceUpdate(true)
-            .call();
+                .setCheckFetchedObjects(true)
+                .setRemoveDeletedRefs(true)
+                .setForceUpdate(true)
+                .call();
 
             // attempt to determine what the origin head commit is
-            ObjectId originHead = getOriginHead(repo);
-
+            ObjectId originHead = ref.getObjectId();
             // reset to HEAD
             Ref result = gud.reset()
                 .setMode(ResetType.HARD)
@@ -315,23 +338,14 @@ public class GitRepository {
                     .build();
             pathToProject = repo.getDirectory().getAbsolutePath();
             gud = new Git(repo);
-
-            // identify remote branches, if exist
-            ObjectId masterRemote = repo.resolve("refs/remotes/origin/master");
-            ObjectId mainRemote = repo.resolve("refs/remotes/origin/main");
-
-            // if we couldn't find master/main, then we don't know how to proceed automatically
-            if (masterRemote == null && mainRemote == null)
-                throw new Exception("Unable to locate remote master/main branch!");
-
-            // if master doesn't exist, use main if it does exist
-            if (masterRemote == null)
-                branch = "main";
+            
+            Ref ref = Git.lsRemoteRepository().setRemote(project.getRepositoryLink()).callAsMap().get("HEAD");
+            branch = ref.getTarget().getName();
 
             // checkout cmd
             CheckoutCommand chkCmd = gud.checkout();
 
-            ObjectId branchLocal = repo.resolve("refs/heads/" + branch);
+            ObjectId branchLocal = repo.resolve(branch);
 
             // if no local branch, we must create
             if (branchLocal == null)
@@ -342,7 +356,7 @@ public class GitRepository {
                 .setName(branch)
                 .setUpstreamMode(SetupUpstreamMode.SET_UPSTREAM)
                 .setForceRefUpdate(true)
-                .setStartPoint("origin/" + branch)
+                .setStartPoint("origin/" + branch.substring(branch.lastIndexOf('/') + 1))
                 .call();
             
             return result.toString();
@@ -365,69 +379,6 @@ public class GitRepository {
             throw e;
         } catch ( Exception e ) {
             log.warn("CHECKOUT Error on #" + project.getProjectId());
-            throw e;
-        } finally {
-            // clean up if necessary
-            if (null!=gud)
-                gud.close();
-        }
-    }
-
-    /**
-     * Attempt to locate the HEAD from Origin for the proper branch.
-     * 
-     * @param repo the Repository to evaluate
-     * @return an ObjectId of the HEAD commit
-     * @throws IOException on API or other IO error
-     */
-    private static ObjectId getOriginHead(Repository repo) throws Exception {
-        // do a fetch/reset on this
-        Git gud = null;
-        try {
-            gud = new Git(repo);
-
-            ObjectId originHead = repo.resolve(Constants.R_REMOTES + "origin/" + Constants.HEAD);
-
-            // if no remote HEAD is found, attempt to find master/main
-            if (originHead == null) {
-                ObjectId masterRemote = repo.resolve("refs/remotes/origin/master");
-                ObjectId mainRemote = repo.resolve("refs/remotes/origin/main");
-
-                // use master if exists, else main
-                if (masterRemote != null) {
-                    originHead = masterRemote;
-                } else if (mainRemote != null) {
-                    originHead = mainRemote;
-                }
-            }
-
-            // if still no HEAD, attempt one last effort to brute force it
-            if (originHead == null) {
-                Collection<Ref> refList = gud.lsRemote().call();
-                for (Ref ref : refList) {
-                    if (ref == null)
-                        continue;
-
-                    Ref leaf = ref.getLeaf();
-                    if (leaf == null)
-                        continue;
-
-                    if (leaf.getName().equals("HEAD")) {
-                        String refId = ref.getObjectId().getName();
-                        log.warn("Brute Forced HEAD location: " + refId);
-                        originHead = ref.getObjectId();
-                        break;
-                    }
-                }
-            }
-
-            // if still no HEAD, we have no way to proceed automatically.
-            if (originHead == null)
-                throw new Exception("Unable to determine Origin Head!");
-                
-            return originHead;
-        } catch ( Exception e ) {
-            log.warn("ORIGIN HEAD Error for repo: " + repo.getFullBranch());
             throw e;
         } finally {
             // clean up if necessary
