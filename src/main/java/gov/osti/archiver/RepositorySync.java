@@ -36,7 +36,7 @@ public class RepositorySync extends Thread {
     @Override
     public void run() {
         EntityManager em = ServletContextListener.createEntityManager();
-        
+
         try {
             if (null!=project) {
                 // find it
@@ -69,6 +69,10 @@ public class RepositorySync extends Thread {
 
                                     // attempt a Pull
                                     try {
+                                        if(!GitRepository.isClean(project)) {
+                                            result = GitRepository.reset(project);
+                                        }
+
                                         result = GitRepository.pull(project);
                                     } catch ( Exception e ) {
                                         String msg = e.getMessage();
@@ -81,10 +85,10 @@ public class RepositorySync extends Thread {
                                             forceCheckout = true;
                                             log.warn("PULL encountered REMOTE REF issue on Project #" + project.getProjectId() + "! Forcing RESET!");
                                         }
-                                        else
+                                        else {
                                             throw e;
+                                        }
                                     }
-
                                     if (forceReset)
                                         // attempt a Reset
                                         result = GitRepository.reset(project);

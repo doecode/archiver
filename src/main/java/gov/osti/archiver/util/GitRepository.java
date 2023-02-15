@@ -10,6 +10,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -183,6 +184,29 @@ public class GitRepository {
      */
     public static boolean isTaggedRelease(String url) {
         return !StringUtils.isEmptyOrNull(getTagFromUrl(url));
+    }
+
+     /**
+     * Attempt to check if the repository's working directory is clear of
+     * changes. 
+     * 
+     * @param project the Project to check
+     * @return a Boolean describing if the directory is clean
+     * @throws IOException on API or other IO error
+     */
+    public static boolean isClean(Project project) throws Exception {
+        Git gud = null;
+        try {
+            FileRepositoryBuilder builder = new FileRepositoryBuilder();
+            Repository repo = builder.setWorkTree(new File(project.getCacheFolder())).findGitDir().setMustExist(true)
+                    .build();
+            gud = new Git(repo);
+            
+            return gud.status().call().isClean();
+        } catch (Exception e) {
+            log.warn("isClean Error on #" + project.getProjectId());
+            throw new Exception(e.getMessage());
+        }
     }
     
     /**
