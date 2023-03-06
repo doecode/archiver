@@ -20,6 +20,7 @@ import gov.osti.archiver.Archiver;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.BufferedInputStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -47,6 +48,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import org.apache.commons.compress.archivers.ArchiveException;
+import org.apache.commons.compress.archivers.ArchiveStreamFactory;
 import org.eclipse.jgit.util.StringUtils;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
@@ -607,12 +609,14 @@ public class ArchiveResource {
                 project.setSendFileNotification(true);
                 
                 // attempt to store and extract the archive file
-                try {
-                    String fileName = saveFile(file, project.getProjectId(), fileInfo.getFileName(), project.getIsLimited());
-                    project.setFileName(fileName);
+                try (BufferedInputStream bis = Extractor.detectArchiveFormat(file, fileInfo.getFileName())) {
                     // ensure we can tell what sort of archive we have
-                    if (null==Extractor.detectArchiveFormat(fileName))
+                    if (null==ArchiveStreamFactory.detect(bis)) {
                         throw new ArchiveException("Invalid or unknown archive format.");
+                    }
+                    String fileName = saveFile(bis, project.getProjectId(), fileInfo.getFileName(), project.getIsLimited());
+
+                    project.setFileName(fileName);
                 } catch ( ArchiveException e ) {
                     log.warn("Invalid Archive for " + fileInfo.getFileName() + ": " + e.getMessage());
                     return ErrorResponse

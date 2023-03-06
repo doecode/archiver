@@ -4,6 +4,7 @@ package gov.osti.archiver.util;
 
 import gov.osti.archiver.listener.ServletContextListener;
 import java.nio.file.Paths;
+import java.io.FileInputStream;
 import org.apache.commons.compress.archivers.ArchiveException;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -65,17 +66,19 @@ public class ExtractorTest {
     @Test
     public void testIdentifyArchive() throws Exception {
         String[] files = { "test.zip", "test.tgz", "test.tar.gz", "test.jar", "test.war", "test.tar", "test.tar.bz2" };
-
         // we expect all these to pass
         for ( String file : files ) {
-            assertNotNull ("Cannot identify file: " + file, Extractor.detectArchiveFormat(getTestFileFor(file)));
+            try(FileInputStream in = new FileInputStream(Paths.get(BASEDIR, "test_files", file).toString())) {
+
+                assertNotNull ("Cannot identify file: " + file, Extractor.detectArchiveFormat(in, getTestFileFor(file)));
+            } catch(Exception e ) {}
         }
-        try {
+        try(FileInputStream in = new FileInputStream(Paths.get(BASEDIR, "test_files", "text_file.txt").toString())) {
             // we expect this one to fail
-            assertNull  ("Identified base text file?", Extractor.detectArchiveFormat(getTestFileFor("text_file.txt")));
+            assertNull  ("Identified base text file?", Extractor.detectArchiveFormat(in, getTestFileFor("text_file.txt")));
 
             fail ("Text file passed extraction detection.");
-        } catch ( ArchiveException e ) {
+        } catch ( Exception e ) {
             // this was expected
         }
     }

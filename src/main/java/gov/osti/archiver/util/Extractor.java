@@ -5,6 +5,7 @@ package gov.osti.archiver.util;
 import gov.osti.archiver.entity.Project;
 import gov.osti.archiver.listener.ServletContextListener;
 import java.io.BufferedInputStream;
+import java.io.InputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -79,32 +80,34 @@ public class Extractor {
      * @throws ArchiveException on archiver errors
      * @throws IOException on file IO errors
      */
-    public static String detectArchiveFormat(String file_name) throws ArchiveException, IOException {
+    public static BufferedInputStream detectArchiveFormat(InputStream file, String file_name) throws ArchiveException, IOException {
         String format = null;
+        BufferedInputStream bis = null;
 
-        if (null!=file_name) {
-            BufferedInputStream bis = null;
-
-            if (file_name.toLowerCase().endsWith("gz")) {
-                bis = new BufferedInputStream(
-                                new GzipCompressorInputStream(
-                                        Files.newInputStream(Paths.get(file_name))));
-            }
-            else if (file_name.toLowerCase().endsWith("bz2")) {
-                bis = new BufferedInputStream(
+        if (null!=file) {
+            try {
+                if (file_name.toLowerCase().endsWith("gz")) {
+                    bis = new BufferedInputStream(
+                        new GzipCompressorInputStream(
+                            file));
+                }
+                else if (file_name.toLowerCase().endsWith("bz2")) {
+                    bis = new BufferedInputStream(
                                 new BZip2CompressorInputStream(
-                                        Files.newInputStream(Paths.get(file_name))));
+                                    file));
+                }
+                else
+                    bis = new BufferedInputStream(
+                        file);
+                
+                // This would close the stream, but it is needed for the saveFile function
+                // if (bis != null) try{bis.close();} catch (Exception e) {}
+            } catch (Exception e) {
+                throw new ArchiveException("Invalid or unknown archive format.");
             }
-            else
-                bis = new BufferedInputStream(
-                                Files.newInputStream(Paths.get(file_name)));
-
-            format = ArchiveStreamFactory.detect(bis);
-
-            if (bis != null) try{bis.close();} catch (Exception e) {}
         }
 
-        return format;
+        return bis;
     }
 
     /**
