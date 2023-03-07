@@ -150,17 +150,23 @@ public class Extractor {
                 // we cannot go "above" the PARENT FOLDER
                 if (!base_file_path.resolve(entry.getName()).startsWith(base_file_path))
                     throw new IOException ("Illegal relative or absolute path in archive.");
+
                 // create folder
-                if (!base_file_path.resolve(entry.getName()).toFile().mkdirs())
-                    throw new IOException ("Unable to create folder: " + entry.getName());
+                if (!base_file_path.resolve(entry.getName()).toFile().mkdirs()) {
+                    // Folder could have been created earlier, since .mkdirs() creates parent folders as well
+                    if(!base_file_path.resolve(entry.getName()).toFile().exists())
+                        throw new IOException ("Unable to create folder: " + entry.getName());
+                }
             } else {
                 // might contain a directory reference
                 if (!base_file_path.resolve(entry.getName()).startsWith(base_file_path))
                     throw new IOException ("Illegal relative or absolute path in file.");
+                
                 // create any intervening file paths necessary if applicable
                 File parent = base_file_path.resolve(entry.getName()).toFile().getParentFile();
                 if (!parent.exists() && !parent.mkdirs())
                     throw new IOException ("Unable to create folder for file: " + entry.getName());
+                
                 // extract file
                 Files.copy(in, base_file_path.resolve(entry.getName()));
             }
