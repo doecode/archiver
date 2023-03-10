@@ -20,6 +20,9 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipEntry;
+import java.util.Enumeration;
 
 /**
  * Take various input File types of compressed archives and unpack them into a
@@ -128,6 +131,11 @@ public class Extractor {
         if (null==project.getFileName())
             return null;
 
+        // ZipInputStream has known issues with extracting some types of 
+        // archives. ZipFile is the reccommended way to handle and isn't 
+        // compatible with the way other archives are handled
+        if(project.getFileName().toLowerCase().endsWith(".zip"))
+            return uncompressZipArchive(project);
         boolean isLimited = project.getIsLimited();
         String targetBaseDir = isLimited ? FILE_LIMITED_BASEDIR : FILE_BASEDIR;
         
@@ -173,6 +181,79 @@ public class Extractor {
         }
 
         if (in != null) try{in.close();} catch (Exception e) {}
+        
+        // send back the file path created
+        return base_file_path.toString();
+    }
+
+    /**
+     * Given a Project with a FileName attached, attempt to uncompress the Zip
+     * archive file into a sub-folder.
+     * 
+     * Filename is considered to be an absolute path; contents will be 
+     * uncompressed into a folder based on the configured FILE BASEDIR value and
+     * PROJECT ID.  Each PROJECT is considered to be a UNIQUE archive area.
+     * 
+     * @param project the Project in question
+     * @return the filename path to the git repository created, or null if
+     * none/no file to uncompress
+     * @throws IOException on file IO errors
+     * @throws ArchiveException on uncompress extraction errors
+     */
+    public static String uncompressZipArchive(Project project) throws IOException, ArchiveException {
+        if (null==project.getFileName())
+            return null;
+
+        boolean isLimited = project.getIsLimited();
+        String targetBaseDir = isLimited ? FILE_LIMITED_BASEDIR : FILE_BASEDIR;
+        
+        // uncompress the archive into the PROJECT folder
+        Path base_file_path = Paths.get(
+                targetBaseDir,
+                String.valueOf(project.getProjectId()));
+        File folder = base_file_path.toFile();
+        if (!folder.exists())
+            throw new IOException ("Extraction folder does not exist.");
+        
+        // open the Zip file
+        try ( ZipFile zipFile = new ZipFile(project.getFileName()) )
+        {
+            
+            Enumeration <? extends ZipEntry> entries = zipFile.entries();
+            // iterate through the Archive, creating folders and extracting files.
+            ZipEntry entry;
+            
+            while ( entries.hasMoreElements() ) {
+                entry = entries.nextElement();
+                // folders MAY NOT be ABSOLUTE, nor be "above" the PARENT FOLDER
+                if (entry.isDirectory()) {
+                    // we cannot go "above" the PARENT FOLDER
+                    if (!base_file_path.resolve(entry.getName()).startsWith(base_file_path))
+                        throw new IOException ("Illegal relative or absolute path in archive.");
+
+                    // create folder
+                    if (!base_file_path.resolve(entry.getName()).toFile().mkdirs()) {
+                        // Folder could have been created earlier, since .mkdirs() creates parent folders as well
+                        if(!base_file_path.resolve(entry.getName()).toFile().exists())
+                            throw new IOException ("Unable to create folder: " + entry.getName());
+                    }
+                } else {
+                    // might contain a directory reference
+                    if (!base_file_path.resolve(entry.getName()).startsWith(base_file_path))
+                        throw new IOException ("Illegal relative or absolute path in file.");
+                    
+                        // create any intervening file paths necessary if applicable
+                    File parent = base_file_path.resolve(entry.getName()).toFile().getParentFile();
+                    if (!parent.exists() && !parent.mkdirs())
+                        throw new IOException ("Unable to create folder for file: " + entry.getName());
+                        
+                        // extract file
+                    Files.copy(zipFile.getInputStream(entry), base_file_path.resolve(entry.getName()));
+                }
+            }
+        } catch (Exception e) {
+            throw e;
+        }
         
         // send back the file path created
         return base_file_path.toString();
