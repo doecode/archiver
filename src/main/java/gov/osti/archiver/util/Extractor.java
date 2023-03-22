@@ -131,22 +131,42 @@ public class Extractor {
         if (null==project.getFileName())
             return null;
 
-        // ZipInputStream has known issues with extracting some types of 
-        // archives. ZipFile is the reccommended way to handle and isn't 
-        // compatible with the way other archives are handled
-        if(project.getFileName().toLowerCase().endsWith(".zip"))
-            return uncompressZipArchive(project);
         boolean isLimited = project.getIsLimited();
         String targetBaseDir = isLimited ? FILE_LIMITED_BASEDIR : FILE_BASEDIR;
         
         // uncompress the archive into the PROJECT folder
         Path base_file_path = Paths.get(
-                targetBaseDir,
-                String.valueOf(project.getProjectId()));
+            targetBaseDir,
+            String.valueOf(project.getProjectId()));
         File folder = base_file_path.toFile();
         if (!folder.exists())
             throw new IOException ("Extraction folder does not exist.");
-        
+            
+        // ZipInputStream has known issues with extracting some types of 
+        // archives. ZipFile is the reccommended way to handle and isn't 
+        // compatible with the way other archives are handled
+        if(project.getFileName().toLowerCase().endsWith(".zip"))
+            return uncompressZipArchive(project, base_file_path);
+        else
+            return uncompressOtherArchive(project, base_file_path);
+    }
+
+    /*
+     * Given a Project with a FileName attached and not a zip archive, 
+     * attempt to uncompress the archive file into a sub-folder.
+     * 
+     * Filename is considered to be an absolute path; contents will be 
+     * uncompressed into a folder based on the configured FILE BASEDIR value and
+     * PROJECT ID.  Each PROJECT is considered to be a UNIQUE archive area.
+     * 
+     * @param project the Project in question
+     * @param base_file_path the location to save the archive
+     * @return the filename path to the git repository created, or null if
+     * none/no file to uncompress
+     * @throws IOException on file IO errors
+     * @throws ArchiveException on uncompress extraction errors
+     */
+    private static String uncompressOtherArchive(Project project, Path base_file_path) throws IOException, ArchiveException {
         // open the archiver stream
         ArchiveInputStream in = openArchiveStream(project.getFileName());
         // iterate through the Archive, creating folders and extracting files.
@@ -184,37 +204,25 @@ public class Extractor {
         
         // send back the file path created
         return base_file_path.toString();
-    }
+   }
+
 
     /**
-     * Given a Project with a FileName attached, attempt to uncompress the Zip
-     * archive file into a sub-folder.
+     * Given a Project with a FileName attached and is a zip archive,
+     * attempt to uncompress the archive file into a sub-folder.
      * 
      * Filename is considered to be an absolute path; contents will be 
      * uncompressed into a folder based on the configured FILE BASEDIR value and
      * PROJECT ID.  Each PROJECT is considered to be a UNIQUE archive area.
      * 
      * @param project the Project in question
+     * @param base_file_path the location to save the archive
      * @return the filename path to the git repository created, or null if
      * none/no file to uncompress
      * @throws IOException on file IO errors
      * @throws ArchiveException on uncompress extraction errors
      */
-    public static String uncompressZipArchive(Project project) throws IOException, ArchiveException {
-        if (null==project.getFileName())
-            return null;
-
-        boolean isLimited = project.getIsLimited();
-        String targetBaseDir = isLimited ? FILE_LIMITED_BASEDIR : FILE_BASEDIR;
-        
-        // uncompress the archive into the PROJECT folder
-        Path base_file_path = Paths.get(
-                targetBaseDir,
-                String.valueOf(project.getProjectId()));
-        File folder = base_file_path.toFile();
-        if (!folder.exists())
-            throw new IOException ("Extraction folder does not exist.");
-        
+    private static String uncompressZipArchive(Project project, Path base_file_path) throws IOException, ArchiveException {        
         // open the Zip file
         try ( ZipFile zipFile = new ZipFile(project.getFileName()) )
         {
