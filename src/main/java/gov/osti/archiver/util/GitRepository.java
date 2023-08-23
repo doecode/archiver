@@ -229,10 +229,17 @@ public class GitRepository {
                     .build();
             pathToProject = repo.getDirectory().getAbsolutePath();
             gud = new Git(repo);
-            
+
+            // fetch remote changes, before doing anything
+            gud.fetch().call();
         
             Ref ref = Git.lsRemoteRepository().setRemote(project.getRepositoryLink()).callAsMap().get("HEAD");
+            if (ref == null) {
+                throw new Exception("Unable to locate remote HEAD for processing!");
+            }
+
             String branch = ref.getTarget().getName();
+            String branchOnly = branch.replaceFirst("^refs\\/heads\\/", "");
 
             CheckoutCommand chkCmd = gud.checkout();
 
@@ -247,7 +254,7 @@ public class GitRepository {
                 .setName(branch)
                 .setUpstreamMode(SetupUpstreamMode.SET_UPSTREAM)
                 // .setForceRefUpdate(true) excluding prevents taking commits from branch and overlaying rather than switching. 
-                .setStartPoint("origin/" + branch.substring(branch.lastIndexOf('/') + 1))
+                .setStartPoint("origin/" + branchOnly)
                 .call();
 
             PullResult result = gud.pull().setRemoteBranchName(branch)   //("origin")
@@ -302,7 +309,11 @@ public class GitRepository {
             gud = new Git(repo);
 
             Ref ref = Git.lsRemoteRepository().setRemote(project.getRepositoryLink()).callAsMap().get("HEAD");
-            // first doa  fetch
+            if (ref == null) {
+                throw new Exception("Unable to locate remote HEAD for processing!");
+            }
+
+            // first do a fetch
             gud.fetch()
                 .setCheckFetchedObjects(true)
                 .setRemoveDeletedRefs(true)
@@ -368,7 +379,12 @@ public class GitRepository {
             gud = new Git(repo);
             
             Ref ref = Git.lsRemoteRepository().setRemote(project.getRepositoryLink()).callAsMap().get("HEAD");
+            if (ref == null) {
+                throw new Exception("Unable to locate remote HEAD for processing!");
+            }
+
             branch = ref.getTarget().getName();
+            String branchOnly = branch.replaceFirst("^refs\\/heads\\/", "");
 
             // checkout cmd
             CheckoutCommand chkCmd = gud.checkout();
@@ -384,7 +400,7 @@ public class GitRepository {
                 .setName(branch)
                 .setUpstreamMode(SetupUpstreamMode.SET_UPSTREAM)
                 .setForceRefUpdate(true)
-                .setStartPoint("origin/" + branch.substring(branch.lastIndexOf('/') + 1))
+                .setStartPoint("origin/" + branchOnly)
                 .call();
             
             return result.toString();
