@@ -64,7 +64,9 @@ public class LaborHoursSync extends Thread {
             }
         } finally {
             // all done with this one
-            callback.completed(project);
+            if (callback != null) {
+                callback.completed(project);
+            }
             em.close();
         }
     }
