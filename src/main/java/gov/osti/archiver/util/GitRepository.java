@@ -198,7 +198,8 @@ public class GitRepository {
         Git gud = null;
         try {
             FileRepositoryBuilder builder = new FileRepositoryBuilder();
-            Repository repo = builder.setWorkTree(new File(project.getCacheFolder())).findGitDir().setMustExist(true)
+            File cf = new File(project.getCacheFolder());
+            Repository repo = builder.setWorkTree(cf).findGitDir(cf).setMustExist(true)
                     .build();
             gud = new Git(repo);
             
@@ -223,7 +224,8 @@ public class GitRepository {
         String pathToProject = "";
         try {
             FileRepositoryBuilder builder = new FileRepositoryBuilder();
-            Repository repo = builder.setWorkTree(new File(project.getCacheFolder())).findGitDir().setMustExist(true)
+            File cf = new File(project.getCacheFolder());
+            Repository repo = builder.setWorkTree(cf).findGitDir(cf).setMustExist(true)
                     .build();
             pathToProject = repo.getDirectory().getAbsolutePath();
             gud = new Git(repo);
@@ -293,7 +295,8 @@ public class GitRepository {
         String pathToProject = "";
         try {
             FileRepositoryBuilder builder = new FileRepositoryBuilder();
-            Repository repo = builder.setWorkTree(new File(project.getCacheFolder())).findGitDir().setMustExist(true)
+            File cf = new File(project.getCacheFolder());
+            Repository repo = builder.setWorkTree(cf).findGitDir(cf).setMustExist(true)
                     .build();
             pathToProject = repo.getDirectory().getAbsolutePath();
             gud = new Git(repo);
@@ -358,7 +361,8 @@ public class GitRepository {
         String pathToProject = "";
         try {
             FileRepositoryBuilder builder = new FileRepositoryBuilder();
-            Repository repo = builder.setWorkTree(new File(project.getCacheFolder())).findGitDir().setMustExist(true)
+            File cf = new File(project.getCacheFolder());
+            Repository repo = builder.setWorkTree(cf).findGitDir(cf).setMustExist(true)
                     .build();
             pathToProject = repo.getDirectory().getAbsolutePath();
             gud = new Git(repo);
