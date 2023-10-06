@@ -1,3 +1,6 @@
+# NOTICE:
+**This repository has been archived and is no longer actively maintained. Please visit [DOE CODE](https://www.osti.gov/doecode/) for more information, or for any questions, please contact [doecoderepositories@osti.gov](doecoderepositories@osti.gov?subject=[DOE%20CODE%20GitHub]%20More%20Information).**
+
 # archiver
 Support REST client for archiving and repository backup service associated with DOECode. Used to cache repositories or archived
 source projects to local file storage.
